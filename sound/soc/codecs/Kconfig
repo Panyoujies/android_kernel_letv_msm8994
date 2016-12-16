@@ -20,6 +20,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_AD73311
 	select SND_SOC_ADAU1373 if I2C
 	select SND_SOC_ADAV80X
+	select SND_SOC_TFA98XX if I2C
 	select SND_SOC_ADS117X
 	select SND_SOC_AK4104 if SPI_MASTER
 	select SND_SOC_AK4535 if I2C
@@ -123,6 +124,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM9705 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9712 if SND_SOC_AC97_BUS
 	select SND_SOC_WM9713 if SND_SOC_AC97_BUS
+	select SND_SOC_ESS9018 if I2C
         help
           Normally ASoC codec drivers are only built if a machine driver which
           uses them is also built since they are only usable with a machine
@@ -559,3 +561,15 @@ config SND_SOC_MSM_HDMI_CODEC_RX
 	help
 	HDMI audio drivers should be built only if the platform
         supports hdmi panel.
+
+config SND_SOC_ESS9018
+	tristate "Audio HiFi support"
+	help
+	  Say Y here to enable Audio HiFi ESS9018 support. This allows
+	  monitoring switches by userspace via sysfs and uevent.
+
+config SND_SOC_TFA98XX
+	tristate "Audio SMART PA support"
+	help
+	  Say Y here to enable Audio SMART PA support. This allows
+	  monitoring switches by userspace via sysfs and uevent.

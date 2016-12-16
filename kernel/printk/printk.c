@@ -45,8 +45,13 @@
 #include <linux/poll.h>
 #include <linux/irq_work.h>
 #include <linux/utsname.h>
+#include <linux/rtc.h>
+#include <linux/crc16.h>
 
 #include <asm/uaccess.h>
+
+#include "last_kmsg.h"
+#include "printk_i.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
@@ -130,93 +135,10 @@ EXPORT_SYMBOL(console_set_on_cmdline);
 /* Flag: console code may call schedule() */
 static int console_may_schedule;
 
-/*
- * The printk log buffer consists of a chain of concatenated variable
- * length records. Every record starts with a record header, containing
- * the overall length of the record.
- *
- * The heads to the first and last entry in the buffer, as well as the
- * sequence numbers of these both entries are maintained when messages
- * are stored..
- *
- * If the heads indicate available messages, the length in the header
- * tells the start next message. A length == 0 for the next message
- * indicates a wrap-around to the beginning of the buffer.
- *
- * Every record carries the monotonic timestamp in microseconds, as well as
- * the standard userspace syslog level and syslog facility. The usual
- * kernel messages use LOG_KERN; userspace-injected messages always carry
- * a matching syslog facility, by default LOG_USER. The origin of every
- * message can be reliably determined that way.
- *
- * The human readable log message directly follows the message header. The
- * length of the message text is stored in the header, the stored message
- * is not terminated.
- *
- * Optionally, a message can carry a dictionary of properties (key/value pairs),
- * to provide userspace with a machine-readable message context.
- *
- * Examples for well-defined, commonly used property names are:
- *   DEVICE=b12:8               device identifier
- *                                b12:8         block dev_t
- *                                c127:3        char dev_t
- *                                n8            netdev ifindex
- *                                +sound:card0  subsystem:devname
- *   SUBSYSTEM=pci              driver-core subsystem name
- *
- * Valid characters in property names are [a-zA-Z0-9.-_]. The plain text value
- * follows directly after a '=' character. Every property is terminated by
- * a '\0' character. The last property is not terminated.
- *
- * Example of a message structure:
- *   0000  ff 8f 00 00 00 00 00 00      monotonic time in nsec
- *   0008  34 00                        record is 52 bytes long
- *   000a        0b 00                  text is 11 bytes long
- *   000c              1f 00            dictionary is 23 bytes long
- *   000e                    03 00      LOG_KERN (facility) LOG_ERR (level)
- *   0010  69 74 27 73 20 61 20 6c      "it's a l"
- *         69 6e 65                     "ine"
- *   001b           44 45 56 49 43      "DEVIC"
- *         45 3d 62 38 3a 32 00 44      "E=b8:2\0D"
- *         52 49 56 45 52 3d 62 75      "RIVER=bu"
- *         67                           "g"
- *   0032     00 00 00                  padding to next message header
- *
- * The 'struct log' buffer header must never be directly exported to
- * userspace, it is a kernel-private implementation detail that might
- * need to be changed in the future, when the requirements change.
- *
- * /dev/kmsg exports the structured data in the following line format:
- *   "level,sequnum,timestamp;<message text>\n"
- *
- * The optional key/value pairs are attached as continuation lines starting
- * with a space character and terminated by a newline. All possible
- * non-prinatable characters are escaped in the "\xff" notation.
- *
- * Users of the export format should ignore possible additional values
- * separated by ',', and find the message after the ';' character.
- */
-
-enum log_flags {
-	LOG_NOCONS	= 1,	/* already flushed, do not print to console */
-	LOG_NEWLINE	= 2,	/* text ended with a newline */
-	LOG_PREFIX	= 4,	/* text started with a prefix */
-	LOG_CONT	= 8,	/* text is a fragment of a continuation line */
-};
-
-struct log {
-	u64 ts_nsec;		/* timestamp in nanoseconds */
-	u16 len;		/* length of entire record */
-	u16 text_len;		/* length of text buffer */
-	u16 dict_len;		/* length of dictionary buffer */
-	u8 facility;		/* syslog facility */
-	u8 flags:5;		/* internal record flags */
-	u8 level:3;		/* syslog level */
-#if defined(CONFIG_LOG_BUF_MAGIC)
-	u32 magic;		/* handle for ramdump analysis tools */
-#endif
-};
-
+#define CONSOLE_STATE_CMDLINE_MAX 30
+#define CONSOLE_NAME_CMDLINE_MAX 30
+char g_console_state[CONSOLE_STATE_CMDLINE_MAX];
+char g_console_name[CONSOLE_NAME_CMDLINE_MAX];
 /*
  * The logbuf_lock protects kmsg buffer, indices, counters. It is also
  * used in interesting ways to provide interlocking in console_unlock();
@@ -224,6 +146,8 @@ struct log {
 static DEFINE_RAW_SPINLOCK(logbuf_lock);
 
 #ifdef CONFIG_PRINTK
+static size_t print_prefix(const struct log *msg, bool syslog, char *buf);
+
 DECLARE_WAIT_QUEUE_HEAD(log_wait);
 /* the next printk record to read by syslog(READ) or /proc/kmsg */
 static u64 syslog_seq;
@@ -234,10 +158,34 @@ static size_t syslog_partial;
 /* index and sequence number of the first record stored in the buffer */
 static u64 log_first_seq;
 static u32 log_first_idx;
+static u16 log_first_seq_crc16 = CRC16_TO_64BIT_ZERO;
+static u16 log_first_idx_crc16 = CRC16_TO_32BIT_ZERO;
+inline void set_log_first_seq(u64 seq)
+{
+	log_first_seq = seq;
+	log_first_seq_crc16 = crc16(CRC16_START_VAL, (u8 *)&seq, sizeof(u64));
+}
+inline void set_log_first_idx(u32 idx)
+{
+	log_first_idx = idx;
+	log_first_idx_crc16 = crc16(CRC16_START_VAL, (u8 *)&idx, sizeof(u32));
+}
 
 /* index and sequence number of the next record to store in the buffer */
 static u64 log_next_seq;
 static u32 log_next_idx;
+static u16 log_next_seq_crc16 = CRC16_TO_64BIT_ZERO;
+static u16 log_next_idx_crc16 = CRC16_TO_32BIT_ZERO;
+inline void set_log_next_seq(u64 seq)
+{
+	log_next_seq = seq;
+	log_next_seq_crc16 = crc16(CRC16_START_VAL, (u8 *)&seq, sizeof(u64));
+}
+inline void set_log_next_idx(u32 idx)
+{
+	log_next_idx = idx;
+	log_next_idx_crc16 = crc16(CRC16_START_VAL, (u8 *)&idx, sizeof(u32));
+}
 
 /* the next printk record to write to the console */
 static u64 console_seq;
@@ -248,16 +196,6 @@ static enum log_flags console_prev;
 static u64 clear_seq;
 static u32 clear_idx;
 
-#define PREFIX_MAX		32
-#define LOG_LINE_MAX		1024 - PREFIX_MAX
-
-/* record buffer */
-#if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)
-#define LOG_ALIGN 4
-#else
-#define LOG_ALIGN __alignof__(struct log)
-#endif
-#define __LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
 static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 static u32 log_buf_len = __LOG_BUF_LEN;
@@ -277,13 +215,6 @@ static u32 log_oops_next_idx;
 static u32 syslog_oops_buf_idx;
 
 static const char log_oops_end[] = "---end of oops log buffer---";
-#endif
-
-#if defined(CONFIG_LOG_BUF_MAGIC)
-static u32 __log_align __used = LOG_ALIGN;
-#define LOG_MAGIC(msg) ((msg)->magic = 0x5d7aefca)
-#else
-#define LOG_MAGIC(msg)
 #endif
 
 /* cpu currently holding logbuf_lock */
@@ -406,6 +337,41 @@ static void log_oops_store(struct log *msg)
 }
 #endif
 
+/* cpu time is not running when kernel is sleep while UTC
+* time is running. So when kernel wakes up from sleep,
+* time calibration is needed.
+*
+* prk_utc_cali is to save calibration data.
+* when exit from sleep,  prk_utc_cali = utc_time -cpu_time;
+*
+* when enter sleep, prk_utc_cali = 0 to stop calibration for
+* the UTC time between sleep and wakeup is not correct.
+*
+* when phone has not enter first sleep,
+* the prk_utc_cali=utc_time set in do_settimeofday(). Because
+* app will call calibrate system time by call do_settimeofday().
+*/
+static unsigned long prk_utc_cali;
+void do_prk_utc_cali(u64 utc_in_sec)
+{
+	u64 local_in_nsec;
+
+	if (utc_in_sec == 0) {
+		prk_utc_cali = 0;
+		return;
+	}
+
+	local_in_nsec = local_clock();
+	do_div(local_in_nsec, 1000000000);
+
+	if (utc_in_sec > local_in_nsec)
+		prk_utc_cali = utc_in_sec - local_in_nsec;
+	else
+		prk_utc_cali = 0;
+
+	return;
+}
+
 /* insert record into the buffer, discard old ones, update heads */
 static void log_store(int facility, int level,
 		      enum log_flags flags, u64 ts_nsec,
@@ -435,8 +401,8 @@ static void log_store(int facility, int level,
 		log_oops_store(msg);
 
 		/* drop old messages until we have enough contiuous space */
-		log_first_idx = log_next(log_first_idx, true);
-		log_first_seq++;
+		set_log_first_idx(log_next(log_first_idx, true));
+		set_log_first_seq(log_first_seq+1);
 	}
 
 	if (log_next_idx + size + sizeof(struct log) >= log_buf_len) {
@@ -447,7 +413,7 @@ static void log_store(int facility, int level,
 		 */
 		memset(log_buf + log_next_idx, 0, sizeof(struct log));
 		LOG_MAGIC((struct log *)(log_buf + log_next_idx));
-		log_next_idx = 0;
+		set_log_next_idx(0);
 	}
 
 	/* fill message */
@@ -464,12 +430,13 @@ static void log_store(int facility, int level,
 		msg->ts_nsec = ts_nsec;
 	else
 		msg->ts_nsec = local_clock();
+	msg->utc_sec = prk_utc_cali;
 	memset(log_dict(msg) + dict_len, 0, pad_len);
 	msg->len = sizeof(struct log) + text_len + dict_len + pad_len;
 
 	/* insert message */
-	log_next_idx += msg->len;
-	log_next_seq++;
+	set_log_next_idx(log_next_idx + msg->len);
+	set_log_next_seq(log_next_seq+1);
 }
 
 #ifdef CONFIG_SECURITY_DMESG_RESTRICT
@@ -676,9 +643,13 @@ static ssize_t devkmsg_read(struct file *file, char __user *buf,
 		 ((user->prev & LOG_CONT) && !(msg->flags & LOG_PREFIX)))
 		cont = '+';
 
-	len = sprintf(user->buf, "%u,%llu,%llu,%c;",
-		      (msg->facility << 3) | msg->level,
-		      user->seq, ts_usec, cont);
+	if (msg->utc_sec == 0) {
+		len = sprintf(user->buf, "%u,%llu,%llu,%c;",
+					(msg->facility << 3) | msg->level,
+					user->seq, ts_usec, cont);
+	} else {
+		len = print_prefix(msg, true, user->buf);
+	}
 	user->prev = msg->flags;
 
 	/* escape non-printable characters */
@@ -1037,6 +1008,93 @@ static size_t print_time(u64 ts, char *buf)
 		       (unsigned long)ts, rem_nsec / 1000);
 }
 
+
+void check_tm(struct rtc_time *tm)
+{
+/* check time format of rtc_time.
+	if error happen, set the number to a wrong number
+*/
+	int error = 0;
+	do {
+		if ((tm->tm_mon + 1 > 12) || ((tm->tm_mon + 1) < 1)) {
+			error = 1;
+			break;
+		}
+
+		if ((tm->tm_mday > 31) || (tm->tm_mday < 0)) {
+			error = 1;
+			break;
+		}
+
+		if ((tm->tm_hour > 24) || (tm->tm_hour < 0)) {
+			error = 1;
+			break;
+		}
+
+		if ((tm->tm_min > 60) || (tm->tm_min < 0)) {
+			error = 1;
+			break;
+		}
+
+		if ((tm->tm_sec > 60) || (tm->tm_sec < 0)) {
+			error = 1;
+			break;
+		}
+	} while(0);
+
+	if (error == 1) {
+		tm->tm_mon = 88;
+		tm->tm_mday = 88;
+		tm->tm_hour = 88;
+		tm->tm_min = 88;
+		tm->tm_sec = 88;
+	}
+}
+
+static int printk_utc_len;
+static size_t print_time_utc(u64 ts, u64 utc_sec, char *buf)
+{
+	struct rtc_time tm;
+	int ret;
+	unsigned long rem_nsec;
+
+	if (!printk_time)
+		return 0;
+
+	if (utc_sec == 0)
+		return print_time(ts, buf);
+
+	rem_nsec = do_div(ts, 1000000000);
+
+	if (!buf) {
+		/* when buf = null, it's NOT only for sanity check.
+		* it will calculate the buf needed by this print line.
+		* we add UTC time and so here, the string length
+		* should be added.
+		* For the length of this format is a constant, so add
+		* printk_utc_len to save the length
+		*/
+		if (printk_utc_len == 0) {
+			char *print_utc_format = "[11-11_11:11:11 UTC]";
+			printk_utc_len = strlen(print_utc_format);
+		}
+		ret = snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
+		ret += printk_utc_len;
+
+		return ret;
+	}
+
+	rtc_time_to_tm(utc_sec + ts, &tm);
+	check_tm(&tm);
+
+	ret = sprintf(buf, "[%5lu.%06lu][%02d-%02d_%02d:%02d:%02d UTC] ",
+					(unsigned long)ts, rem_nsec / 1000,
+					tm.tm_mon + 1, tm.tm_mday,
+					tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+	return ret;
+}
+
 static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
 {
 	size_t len = 0;
@@ -1056,11 +1114,11 @@ static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
 		}
 	}
 
-	len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
+	len += print_time_utc(msg->ts_nsec, msg->utc_sec, buf ? buf + len : NULL);
 	return len;
 }
 
-static size_t msg_print_text(const struct log *msg, enum log_flags prev,
+size_t msg_print_text(const struct log *msg, enum log_flags prev,
 			     bool syslog, char *buf, size_t size)
 {
 	const char *text = log_text(msg);
@@ -2127,6 +2185,19 @@ static int __init console_setup(char *str)
 }
 __setup("console=", console_setup);
 
+static int __init get_console_name(char *str)
+{
+	strlcpy(g_console_name, str, CONSOLE_NAME_CMDLINE_MAX);
+	return 1;
+}
+__setup("androidboot.console=", get_console_name);
+
+static int __init get_console_state(char *str)
+{
+	strlcpy(g_console_state, str, CONSOLE_STATE_CMDLINE_MAX);
+	return 1;
+}
+__setup("android.letv.serial_console=", get_console_state);
 /**
  * add_preferred_console - add a device to the list of preferred consoles.
  * @name: device name
@@ -3234,5 +3305,22 @@ void show_regs_print_info(const char *log_lvl)
 	       log_lvl, current, current_thread_info(),
 	       task_thread_info(current));
 }
+
+#ifdef CONFIG_LAST_KMSG_LETV
+void last_kmsg_info_hook(last_kmsg_addr_info_t *p)
+{
+	p->version_addr = (u64)virt_to_phys(linux_banner);
+	p->log_buf_addr = (u64)virt_to_phys(log_buf);
+	p->log_buf_len = log_buf_len;
+	p->log_first_idx_addr = (u64)virt_to_phys(&log_first_idx);
+	p->log_first_idx_crc16_addr = (u64)virt_to_phys(&log_first_idx_crc16);
+	p->log_first_seq_addr = (u64)virt_to_phys(&log_first_seq);
+	p->log_first_seq_crc16_addr = (u64)virt_to_phys(&log_first_seq_crc16);
+	p->log_next_idx_addr = (u64)virt_to_phys(&log_next_idx);
+	p->log_next_idx_crc16_addr = (u64)virt_to_phys(&log_next_idx_crc16);
+	p->log_next_seq_addr = (u64)virt_to_phys(&log_next_seq);
+	p->log_next_seq_crc16_addr = (u64)virt_to_phys(&log_next_seq_crc16);
+}
+#endif
 
 #endif

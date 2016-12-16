@@ -24,6 +24,7 @@
 #include <linux/delay.h>
 #include <linux/qpnp/power-on.h>
 #include <linux/of_address.h>
+#include <linux/panic_reason.h>
 
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
@@ -63,7 +64,7 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static int dload_set(const char *val, struct kernel_param *kp);
-static int download_mode = 1;
+int download_mode = 1;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 static int panic_prep_restart(struct notifier_block *this,
@@ -148,6 +149,7 @@ static void enable_emergency_dload_mode(void)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
 
+int download_mode_set_by_manual;
 static int dload_set(const char *val, struct kernel_param *kp)
 {
 	int ret;
@@ -163,6 +165,9 @@ static int dload_set(const char *val, struct kernel_param *kp)
 		download_mode = old_val;
 		return -EINVAL;
 	}
+
+	if (download_mode == 1)
+		download_mode_set_by_manual = 1;
 
 	set_dload_mode(download_mode);
 
@@ -181,6 +186,11 @@ static bool get_dload_mode(void)
 	return false;
 }
 #endif
+
+void set_dload_mode_ext(int on)
+{
+	set_dload_mode(on);
+}
 
 void msm_set_restart_mode(int mode)
 {
@@ -328,6 +338,7 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	};
 
 	pr_notice("Going down for restart now\n");
+	set_panic_trig_rsn(KERNEL_ALIVE);
 
 	msm_restart_prepare(cmd);
 
@@ -367,6 +378,7 @@ static void do_msm_poweroff(void)
 	};
 
 	pr_notice("Powering off the SoC\n");
+	set_panic_trig_rsn(KERNEL_ALIVE);
 #ifdef CONFIG_MSM_DLOAD_MODE
 	set_dload_mode(0);
 #endif

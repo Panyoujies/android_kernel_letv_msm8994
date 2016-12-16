@@ -2668,10 +2668,12 @@ int msm_hdmi_register_mhl(struct platform_device *pdev,
 	ops->set_mhl_max_pclk = hdmi_tx_set_mhl_max_pclk;
 	ops->set_upstream_hpd = hdmi_tx_set_mhl_hpd;
 
+	hdmi_ctrl->hdmi_tx_hpd_done = (void *)(ops->notify);
 	hdmi_ctrl->ds_registered = true;
 
 	return 0;
 }
+EXPORT_SYMBOL(msm_hdmi_register_mhl);
 
 static int hdmi_tx_get_cable_status(struct platform_device *pdev, u32 vote)
 {
@@ -2998,10 +3000,10 @@ end:
 		hdmi_tx_is_dvi_mode(hdmi_ctrl) ? "ON" : "OFF");
 
 	hdmi_tx_hpd_polarity_setup(hdmi_ctrl, HPD_DISCONNECT_POLARITY);
-
+/*
 	if (hdmi_ctrl->hdmi_tx_hpd_done)
 		hdmi_ctrl->hdmi_tx_hpd_done(hdmi_ctrl->downstream_data);
-
+*/
 	return 0;
 } /* hdmi_tx_power_on */
 

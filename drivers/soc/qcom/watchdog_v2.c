@@ -31,6 +31,7 @@
 #include <soc/qcom/memory_dump.h>
 #include <soc/qcom/watchdog.h>
 #include <linux/kmemleak.h>
+#include <linux/panic_reason.h>
 
 #define MODULE_NAME "msm_watchdog"
 #define WDT0_ACCSCSSNBARK_INT 0
@@ -409,6 +410,7 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 	unsigned long nanosec_rem;
 	unsigned long long t = sched_clock();
 
+	set_panic_trig_rsn(TRIG_WDOG_BARK);
 	nanosec_rem = do_div(t, 1000000000);
 	printk(KERN_INFO "Watchdog bark! Now = %lu.%06lu\n", (unsigned long) t,
 		nanosec_rem / 1000);

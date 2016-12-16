@@ -199,9 +199,9 @@ enum fg_mem_data_index {
 static struct fg_mem_setting settings[FG_MEM_SETTING_MAX] = {
 	/*       ID                    Address, Offset, Value*/
 	SETTING(SOFT_COLD,       0x454,   0,      100),
-	SETTING(SOFT_HOT,        0x454,   1,      400),
+	SETTING(SOFT_HOT,        0x454,   1,      450),
 	SETTING(HARD_COLD,       0x454,   2,      50),
-	SETTING(HARD_HOT,        0x454,   3,      450),
+	SETTING(HARD_HOT,        0x454,   3,      550),
 	SETTING(RESUME_SOC,      0x45C,   1,      0),
 	SETTING(BCL_LM_THRESHOLD, 0x47C,   2,      50),
 	SETTING(BCL_MH_THRESHOLD, 0x47C,   3,      752),
@@ -1210,7 +1210,7 @@ static int get_monotonic_soc_raw(struct fg_chip *chip)
 }
 
 #define EMPTY_CAPACITY		0
-#define DEFAULT_CAPACITY	50
+#define DEFAULT_CAPACITY	-1
 #define MISSING_CAPACITY	100
 #define FULL_CAPACITY		100
 #define FULL_SOC_RAW		0xFF
@@ -4767,6 +4767,77 @@ static const struct file_operations fg_memif_dfs_reg_fops = {
 	.write		= fg_memif_dfs_reg_write,
 };
 
+#define ADDR_OF_FG_REGS_START	0x400
+#define COUNT_OF_ALL_FG_REGS	0x200
+static int fg_regs_open(struct inode *inode, struct file *file)
+{
+	struct fg_log_buffer *log;
+	struct fg_trans *trans;
+	u8 *data_buf;
+
+	size_t logbufsize = SZ_4K;
+	size_t databufsize = SZ_4K;
+
+	if (!dbgfs_data.chip) {
+		pr_err("Not initialized data\n");
+		return -EINVAL;
+	}
+
+	/* Per file "transaction" data */
+	trans = kzalloc(sizeof(*trans), GFP_KERNEL);
+	if (!trans) {
+		pr_err("Unable to allocate memory for transaction data\n");
+		return -ENOMEM;
+	}
+
+	/* Allocate log buffer */
+	log = kzalloc(logbufsize, GFP_KERNEL);
+
+	if (!log) {
+		kfree(trans);
+		pr_err("Unable to allocate memory for log buffer\n");
+		return -ENOMEM;
+	}
+
+	log->rpos = 0;
+	log->wpos = 0;
+	log->len = logbufsize - sizeof(*log);
+
+	/* Allocate data buffer */
+	data_buf = kzalloc(databufsize, GFP_KERNEL);
+
+	if (!data_buf) {
+		kfree(trans);
+		kfree(log);
+		pr_err("Unable to allocate memory for data buffer\n");
+		return -ENOMEM;
+	}
+
+	trans->log		= log;
+	trans->data		= data_buf;
+	trans->cnt		= COUNT_OF_ALL_FG_REGS;
+	trans->addr		= ADDR_OF_FG_REGS_START;
+	trans->chip		= dbgfs_data.chip;
+	trans->offset	= trans->addr;
+
+	file->private_data = trans;
+	return 0;
+}
+
+static ssize_t fg_regs_write(struct file *file, const char __user *buf,
+			size_t count, loff_t *ppos)
+{
+	/* To be Done */
+	return 0;
+}
+
+static const struct file_operations fg_regs_sys_ops = {
+	.open		= fg_regs_open,
+	.release	= fg_memif_dfs_close,
+	.read		= fg_memif_dfs_reg_read,
+	.write		= fg_regs_write,
+};
+
 /**
  * fg_dfs_create_fs: create debugfs file system.
  * @return pointer to root directory or NULL if failed to create fs
@@ -4853,6 +4924,14 @@ int fg_dfs_create(struct fg_chip *chip)
 							&fg_memif_dfs_reg_fops);
 	if (!file) {
 		pr_err("error creating 'data' entry\n");
+		goto err_remove_fs;
+	}
+
+	/* create interface for dump all fg_regs. */
+	file = debugfs_create_file("fg_regs", S_IRUGO | S_IWUSR, root, chip,
+							&fg_regs_sys_ops);
+	if (!file) {
+		pr_err("error creating 'fg_regs' entry\n");
 		goto err_remove_fs;
 	}
 

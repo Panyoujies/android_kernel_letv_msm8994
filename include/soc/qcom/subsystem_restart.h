@@ -99,6 +99,7 @@ struct notif_data {
 
 extern int subsys_get_restart_level(struct subsys_device *dev);
 extern int subsystem_restart_dev(struct subsys_device *dev);
+extern void set_rst_level_soc(struct subsys_device *dev);
 extern int subsystem_restart(const char *name);
 extern int subsystem_crashed(const char *name);
 
@@ -124,6 +125,10 @@ static inline int subsys_get_restart_level(struct subsys_device *dev)
 static inline int subsystem_restart_dev(struct subsys_device *dev)
 {
 	return 0;
+}
+static void set_rst_level_soc(struct subsys_device *dev);
+{
+	return;
 }
 
 static inline int subsystem_restart(const char *name)

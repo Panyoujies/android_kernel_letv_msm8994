@@ -29,6 +29,10 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/qpnp/power-on.h>
+#include <linux/panic_reason.h>
+#include <linux/usb/android.h>
+
+#include <soc/qcom/restart.h>
 
 #define CREATE_MASK(NUM_BITS, POS) \
 	((unsigned char) (((1 << (NUM_BITS)) - 1) << (POS)))
@@ -232,6 +236,9 @@ static const char * const qpnp_poff_reason[] = {
  */
 static int warm_boot;
 module_param(warm_boot, int, 0);
+
+unsigned int poff_reason;
+EXPORT_SYMBOL(poff_reason);
 
 static int
 qpnp_pon_masked_write(struct qpnp_pon *pon, u16 addr, u8 mask, u8 val)
@@ -695,6 +702,10 @@ static irqreturn_t qpnp_kpdpwr_irq(int irq, void *_pon)
 
 static irqreturn_t qpnp_kpdpwr_bark_irq(int irq, void *_pon)
 {
+	struct qpnp_pon *pon = _pon;
+
+	set_panic_trig_rsn(TRIG_LONG_PRESS_PWR_KEY);
+	dev_emerg(&pon->spmi->dev, "qpnp_kpdpwr_bark_irq!\n");
 	return IRQ_HANDLED;
 }
 
@@ -709,8 +720,23 @@ static irqreturn_t qpnp_resin_irq(int irq, void *_pon)
 	return IRQ_HANDLED;
 }
 
+extern int download_mode_set_by_manual;
+extern int download_mode;
 static irqreturn_t qpnp_kpdpwr_resin_bark_irq(int irq, void *_pon)
 {
+	set_panic_trig_rsn(TRIG_LONG_PRESS_PWR_KEY);
+	if ((download_mode_set_by_manual == 1)
+		|| ((download_mode == 1) && is_usb_configured())) {
+		panic("power + volume down triggered panic!\n");
+	} else {
+		struct qpnp_pon *pon = _pon;
+
+		if (download_mode == 1)
+			set_dload_mode_ext(0);
+
+		dev_emerg(&pon->spmi->dev, "qpnp_kpdpwr_resin_bark_irq!\n");
+	}
+
 	return IRQ_HANDLED;
 }
 
@@ -1954,6 +1980,8 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 		pon->is_spon = true;
 	} else {
 		boot_reason = ffs(pon_sts);
+		if (poff_sts)
+			poff_reason = ffs(poff_sts);
 	}
 
 	/* config whether store the hard reset reason */
@@ -2012,3 +2040,5 @@ module_exit(qpnp_pon_exit);
 
 MODULE_DESCRIPTION("QPNP PMIC POWER-ON driver");
 MODULE_LICENSE("GPL v2");
+
+#include "qpnp-power-on_le.c"

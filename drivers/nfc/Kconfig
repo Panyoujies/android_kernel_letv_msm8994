@@ -58,3 +58,12 @@ config NFC_NQ
 	  This enables the NFC driver for NQx based devices.
 	  This is for i2c connected version. NCI protocol logic
 	  resides in the usermode and it has no other NFC dependencies.
+
+config NFC_NXP_PN547
+	bool "NXP NCI based NFC Controller Driver for pn547"
+	depends on I2C
+	select CRC_CCITT
+	help
+	  This enables the NFC driver for pn547 based devices.
+	  This is for i2c connected version. NCI protocol logic
+	  resides in the usermode and it has no other NFC dependencies.

@@ -29,6 +29,8 @@ struct msm_eeprom_ctrl_t;
 
 #define PROPERTY_MAXSIZE 32
 
+#define OTP_CAMERA_BUFF_SIZE 0x400
+
 struct msm_eeprom_ctrl_t {
 	struct platform_device *pdev;
 	struct mutex *eeprom_mutex;
@@ -46,5 +48,32 @@ struct msm_eeprom_ctrl_t {
 	uint32_t subdev_id;
 	uint32_t read_eeprom;
 };
+
+typedef int (*msm_otp_func)(uint8_t*, uint32_t, uint16_t);
+
+struct msm_otp_data {
+	uint8_t data_type;
+	msm_otp_func otp_data_func;
+};
+
+struct msm_otp_type {
+	uint32_t otp_camera_num;
+	uint8_t module_id;
+	uint8_t eeprom_name[19];
+	uint8_t otp_camera_buf[OTP_CAMERA_BUFF_SIZE];
+	struct msm_otp_data *otp_data_tbl;
+} msm_front_otp_type_str, msm_rear_otp_type_str;
+
+static int msm_get_otp_front_camera_id(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_front_camera_awb(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_front_camera_module_id(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_id(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_awb(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_af(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_ois(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_pdaf(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_module_id(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_front_camera_all(uint8_t*, uint32_t, uint16_t);
+static int msm_get_otp_rear_camera_all(uint8_t*, uint32_t, uint16_t);
 
 #endif

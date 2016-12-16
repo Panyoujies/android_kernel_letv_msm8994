@@ -40,6 +40,8 @@ struct android_usb_platform_data {
 	bool cdrom;
 };
 
+int is_usb_configured(void);
+
 #ifndef CONFIG_TARGET_CORE
 static inline int f_tcm_init(int (*connect_cb)(bool connect))
 {

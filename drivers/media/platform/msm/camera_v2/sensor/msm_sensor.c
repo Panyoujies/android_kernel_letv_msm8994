@@ -20,8 +20,11 @@
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
+//#define CDBG(fmt, args...) printk(fmt, ##args)
+
 
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
+
 static void msm_sensor_adjust_mclk(struct msm_camera_power_ctrl_t *ctrl)
 {
 	int idx;
@@ -525,7 +528,6 @@ static uint16_t msm_sensor_id_by_mask(struct msm_sensor_ctrl_t *s_ctrl,
 	}
 	return sensor_id;
 }
-
 int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int rc = 0;
@@ -533,7 +535,11 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	struct msm_camera_i2c_client *sensor_i2c_client;
 	struct msm_camera_slave_info *slave_info;
 	const char *sensor_name;
-
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	uint8_t camera_id = 0;
+	uint8_t module_id = 0;
+	uint8_t moduleid_otp_buf[MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE];
+#endif
 	if (!s_ctrl) {
 		pr_err("%s:%d failed: %p\n",
 			__func__, __LINE__, s_ctrl);
@@ -542,7 +548,10 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	sensor_i2c_client = s_ctrl->sensor_i2c_client;
 	slave_info = s_ctrl->sensordata->slave_info;
 	sensor_name = s_ctrl->sensordata->sensor_name;
-
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	camera_id = s_ctrl->sensordata->slave_info->camera_id;
+	module_id = s_ctrl->sensordata->slave_info->module_id;
+#endif
 	if (!sensor_i2c_client || !slave_info || !sensor_name) {
 		pr_err("%s:%d failed: %p %p %p\n",
 			__func__, __LINE__, sensor_i2c_client, slave_info,
@@ -557,13 +566,71 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		pr_err("%s: %s: read id failed\n", __func__, sensor_name);
 		return rc;
 	}
-
 	CDBG("%s: read id: 0x%x expected id 0x%x:\n", __func__, chipid,
 		slave_info->sensor_id);
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("msm_sensor_match_id chip id doesnot match\n");
 		return -ENODEV;
 	}
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	if (CAMERA_0 == camera_id) {
+#ifndef LETV_SUPPORT_DESIGNED_SENSOR
+		if (strcmp("imx214", sensor_name) &&
+			strcmp("imx214_ofilm", sensor_name) &&
+			/* ADD-S for 3m2 module id checking */
+			strcmp("s5k3m2_ofilm", sensor_name) &&
+			/* ADD-E for 3m2 module id checking */
+			strcmp("imx230_sunny", sensor_name) &&
+			strcmp("imx230", sensor_name)) {
+			pr_err("%s:Err unknown sensor %s\n", __func__,
+				sensor_name);
+			return rc;
+		}
+#endif
+		memset(moduleid_otp_buf, 0,
+			MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE);
+		rc = msm_get_otp_data(moduleid_otp_buf,
+			MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE,
+			OTP_REAR_CAMERA_MODULE_ID);
+	} else {
+#ifndef LETV_SUPPORT_DESIGNED_SENSOR
+		if (strcmp("ov4688", sensor_name) &&
+			strcmp("ov4688_sharp", sensor_name)) {
+			pr_err("%s:Err unknown sensor %s\n", __func__,
+				sensor_name);
+			return rc;
+		}
+#endif
+		memset(moduleid_otp_buf, 0,
+			MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE);
+		rc = msm_get_otp_data(moduleid_otp_buf,
+			MSM_OTP_FRONT_CAMERA_MODULE_ID_BUFF_SIZE,
+			OTP_FRONT_CAMERA_MODULE_ID);
+	}
+	pr_err("%s:%s module id: 0x%x expected id 0x%x:\n", __func__,
+		sensor_name, moduleid_otp_buf[0], module_id);
+#if 0
+	//For test module id begin
+	if(!strcmp("imx230_sunny", sensor_name) ||
+		!strcmp("imx230", sensor_name)){
+		moduleid_otp_buf[0] = 0x2;
+		pr_err("%s: It is %s, reset to 0x2\n", __func__,sensor_name);	
+		return rc;
+	}else if(!strcmp("ov4688_sharp", sensor_name)||
+	    !strcmp("ov4688", sensor_name)){
+	    moduleid_otp_buf[0] = 0x21;
+		pr_err("%s: It is %s, reset to 0x21 \n", __func__,sensor_name);	
+		return rc;
+
+	}
+	//For test module id end
+#endif
+	if (moduleid_otp_buf[0] != module_id) {
+		pr_err("msm_sensor_match_id module id doesnot match\n");
+		return -ENODEV;
+	}
+
+#endif
 	return rc;
 }
 

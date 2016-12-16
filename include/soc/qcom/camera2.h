@@ -46,6 +46,11 @@ struct msm_camera_slave_info {
 	uint16_t sensor_id_reg_addr;
 	uint16_t sensor_id;
 	uint16_t sensor_id_mask;
+#ifndef LETV_SINGLE_MODULE_VENDOR
+		uint8_t camera_id;
+		uint8_t module_id;
+#endif
+
 };
 
 struct msm_cam_clk_info {

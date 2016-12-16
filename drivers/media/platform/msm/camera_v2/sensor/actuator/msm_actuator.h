@@ -33,6 +33,7 @@ struct msm_actuator_ctrl_t;
 enum msm_actuator_state_t {
 	ACT_ENABLE_STATE,
 	ACT_OPS_ACTIVE,
+	ACT_INIT_STATE,
 	ACT_OPS_INACTIVE,
 	ACT_DISABLE_STATE,
 };
@@ -105,6 +106,8 @@ struct msm_actuator_ctrl_t {
 	struct msm_actuator_vreg vreg_cfg;
 	struct park_lens_data_t park_lens;
 	uint32_t max_code_size;
+	struct msm_camera_sensor_board_info *actuatordata;
+	const char *project_name;
 };
 
 #endif

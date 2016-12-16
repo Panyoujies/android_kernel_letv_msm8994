@@ -25,6 +25,638 @@ DEFINE_MSM_MUTEX(msm_eeprom_mutex);
 #ifdef CONFIG_COMPAT
 static struct v4l2_file_operations msm_eeprom_v4l2_subdev_fops;
 #endif
+
+static struct msm_camera_i2c_reg_array sensor_reg_array[] =
+{
+	/* init */
+	{0x0103, 0x01, 0},
+	/* Res 0 Normal 2688 x 1520 30fps */
+	{0x3638, 0x00, 0x00},
+	{0x0300, 0x04, 0x00},
+	{0x0302, 0x64, 0x00},
+	{0x0303, 0x01, 0x00},
+	{0x0304, 0x03, 0x00},
+	{0x030b, 0x00, 0x00},
+	{0x030d, 0x1e, 0x00},
+	{0x030e, 0x04, 0x00},
+	{0x030f, 0x01, 0x00},
+	{0x0312, 0x01, 0x00},
+	{0x031e, 0x00, 0x00},
+	{0x3000, 0x20, 0x00},
+	{0x3002, 0x00, 0x00},
+	{0x3018, 0x72, 0x00},
+	{0x3019, 0x00, 0x00},
+	{0x3020, 0x93, 0x00},
+	{0x3021, 0x03, 0x00},
+	{0x3022, 0x01, 0x00},
+	{0x3031, 0x0a, 0x00},
+	{0x3305, 0xf1, 0x00},
+	{0x3307, 0x04, 0x00},
+	{0x3309, 0x29, 0x00},
+	{0x3500, 0x00, 0x00},
+	{0x3501, 0x60, 0x00},
+	{0x3502, 0x00, 0x00},
+	{0x3503, 0x04, 0x00},
+	{0x3504, 0x00, 0x00},
+	{0x3505, 0x00, 0x00},
+	{0x3506, 0x00, 0x00},
+	{0x3507, 0x00, 0x00},
+	{0x3508, 0x00, 0x00},
+	{0x3509, 0x80, 0x00},
+	{0x350a, 0x00, 0x00},
+	{0x350b, 0x00, 0x00},
+	{0x350c, 0x00, 0x00},
+	{0x350d, 0x00, 0x00},
+	{0x350e, 0x00, 0x00},
+	{0x350f, 0x80, 0x00},
+	{0x3510, 0x00, 0x00},
+	{0x3511, 0x00, 0x00},
+	{0x3512, 0x00, 0x00},
+	{0x3513, 0x00, 0x00},
+	{0x3514, 0x00, 0x00},
+	{0x3515, 0x80, 0x00},
+	{0x3516, 0x00, 0x00},
+	{0x3517, 0x00, 0x00},
+	{0x3518, 0x00, 0x00},
+	{0x3519, 0x00, 0x00},
+	{0x351a, 0x00, 0x00},
+	{0x351b, 0x80, 0x00},
+	{0x351c, 0x00, 0x00},
+	{0x351d, 0x00, 0x00},
+	{0x351e, 0x00, 0x00},
+	{0x351f, 0x00, 0x00},
+	{0x3520, 0x00, 0x00},
+	{0x3521, 0x80, 0x00},
+	{0x3522, 0x08, 0x00},
+	{0x3524, 0x08, 0x00},
+	{0x3526, 0x08, 0x00},
+	{0x3528, 0x08, 0x00},
+	{0x352a, 0x08, 0x00},
+	{0x3602, 0x00, 0x00},
+	{0x3604, 0x02, 0x00},
+	{0x3605, 0x00, 0x00},
+	{0x3606, 0x00, 0x00},
+	{0x3607, 0x00, 0x00},
+	{0x3609, 0x12, 0x00},
+	{0x360a, 0x40, 0x00},
+	{0x360c, 0x08, 0x00},
+	{0x360f, 0xe5, 0x00},
+	{0x3608, 0x8f, 0x00},
+	{0x3611, 0x00, 0x00},
+	{0x3613, 0xf7, 0x00},
+	{0x3616, 0x58, 0x00},
+	{0x3619, 0x99, 0x00},
+	{0x361b, 0x60, 0x00},
+	{0x361c, 0x7a, 0x00},
+	{0x361e, 0x79, 0x00},
+	{0x361f, 0x02, 0x00},
+	{0x3631, 0x60, 0x00},
+	{0x3632, 0x00, 0x00},
+	{0x3633, 0x10, 0x00},
+	{0x3634, 0x10, 0x00},
+	{0x3635, 0x10, 0x00},
+	{0x3636, 0x15, 0x00},
+	{0x3646, 0x86, 0x00},
+	{0x364a, 0x0b, 0x00},
+	{0x3700, 0x17, 0x00},
+	{0x3701, 0x22, 0x00},
+	{0x3703, 0x10, 0x00},
+	{0x370a, 0x37, 0x00},
+	{0x3705, 0x00, 0x00},
+	{0x3706, 0x63, 0x00},
+	{0x3709, 0x3c, 0x00},
+	{0x370b, 0x01, 0x00},
+	{0x370c, 0x30, 0x00},
+	{0x3710, 0x24, 0x00},
+	{0x3711, 0x0c, 0x00},
+	{0x3716, 0x00, 0x00},
+	{0x3720, 0x28, 0x00},
+	{0x3729, 0x7b, 0x00},
+	{0x372a, 0x84, 0x00},
+	{0x372b, 0xbd, 0x00},
+	{0x372c, 0xbc, 0x00},
+	{0x372e, 0x52, 0x00},
+	{0x373c, 0x0e, 0x00},
+	{0x373e, 0x33, 0x00},
+	{0x3743, 0x10, 0x00},
+	{0x3744, 0x88, 0x00},
+	{0x374a, 0x43, 0x00},
+	{0x374c, 0x00, 0x00},
+	{0x374e, 0x23, 0x00},
+	{0x3751, 0x7b, 0x00},
+	{0x3752, 0x84, 0x00},
+	{0x3753, 0xbd, 0x00},
+	{0x3754, 0xbc, 0x00},
+	{0x3756, 0x52, 0x00},
+	{0x375c, 0x00, 0x00},
+	{0x3760, 0x00, 0x00},
+	{0x3761, 0x00, 0x00},
+	{0x3762, 0x00, 0x00},
+	{0x3763, 0x00, 0x00},
+	{0x3764, 0x00, 0x00},
+	{0x3767, 0x04, 0x00},
+	{0x3768, 0x04, 0x00},
+	{0x3769, 0x08, 0x00},
+	{0x376a, 0x08, 0x00},
+	{0x376b, 0x20, 0x00},
+	{0x376c, 0x00, 0x00},
+	{0x376d, 0x00, 0x00},
+	{0x376e, 0x00, 0x00},
+	{0x3773, 0x00, 0x00},
+	{0x3774, 0x51, 0x00},
+	{0x3776, 0xbd, 0x00},
+	{0x3777, 0xbd, 0x00},
+	{0x3781, 0x18, 0x00},
+	{0x3783, 0x25, 0x00},
+	{0x3800, 0x00, 0x00},
+	{0x3801, 0x08, 0x00},
+	{0x3802, 0x00, 0x00},
+	{0x3803, 0x04, 0x00},
+	{0x3804, 0x0a, 0x00},
+	{0x3805, 0x97, 0x00},
+	{0x3806, 0x05, 0x00},
+	{0x3807, 0xfb, 0x00},
+	{0x3808, 0x0a, 0x00},
+	{0x3809, 0x80, 0x00},
+	{0x380a, 0x05, 0x00},
+	{0x380b, 0xf0, 0x00},
+	{0x380c, 0x09, 0x00},
+	{0x380d, 0xC4, 0x00},
+	{0x380e, 0x07, 0x00},
+	{0x380f, 0xc0, 0x00},
+	{0x3810, 0x00, 0x00},
+	{0x3811, 0x08, 0x00},
+	{0x3812, 0x00, 0x00},
+	{0x3813, 0x04, 0x00},
+	{0x3814, 0x01, 0x00},
+	{0x3815, 0x01, 0x00},
+	{0x3819, 0x01, 0x00},
+	{0x3820, 0x06, 0x00},
+	{0x3821, 0x00, 0x00},
+	{0x3829, 0x00, 0x00},
+	{0x382a, 0x01, 0x00},
+	{0x382b, 0x01, 0x00},
+	{0x382d, 0x7f, 0x00},
+	{0x3830, 0x04, 0x00},
+	{0x3836, 0x01, 0x00},
+	{0x3841, 0x02, 0x00},
+	{0x3846, 0x08, 0x00},
+	{0x3847, 0x07, 0x00},
+	{0x3d85, 0x36, 0x00},
+	{0x3d8c, 0x71, 0x00},
+	{0x3d8d, 0xcb, 0x00},
+	{0x3f0a, 0x00, 0x00},
+	{0x4000, 0x71, 0x00},
+	{0x4001, 0x40, 0x00},
+	{0x4002, 0x04, 0x00},
+	{0x4003, 0x14, 0x00},
+	{0x400e, 0x00, 0x00},
+	{0x4011, 0x00, 0x00},
+	{0x401a, 0x00, 0x00},
+	{0x401b, 0x00, 0x00},
+	{0x401c, 0x00, 0x00},
+	{0x401d, 0x00, 0x00},
+	{0x401f, 0x00, 0x00},
+	{0x4020, 0x00, 0x00},
+	{0x4021, 0x10, 0x00},
+	{0x4022, 0x07, 0x00},
+	{0x4023, 0xcf, 0x00},
+	{0x4024, 0x09, 0x00},
+	{0x4025, 0x60, 0x00},
+	{0x4026, 0x09, 0x00},
+	{0x4027, 0x6f, 0x00},
+	{0x4028, 0x00, 0x00},
+	{0x4029, 0x02, 0x00},
+	{0x402a, 0x06, 0x00},
+	{0x402b, 0x04, 0x00},
+	{0x402c, 0x02, 0x00},
+	{0x402d, 0x02, 0x00},
+	{0x402e, 0x0e, 0x00},
+	{0x402f, 0x04, 0x00},
+	{0x4302, 0xff, 0x00},
+	{0x4303, 0xff, 0x00},
+	{0x4304, 0x00, 0x00},
+	{0x4305, 0x00, 0x00},
+	{0x4306, 0x00, 0x00},
+	{0x4308, 0x02, 0x00},
+	{0x4500, 0x6c, 0x00},
+	{0x4501, 0xc4, 0x00},
+	{0x4502, 0x40, 0x00},
+	{0x4503, 0x02, 0x00},
+	{0x4600, 0x00, 0x00},
+	{0x4601, 0xA7, 0x00},
+	{0x4800, 0x24, 0x00},
+	{0x4813, 0x08, 0x00},
+	{0x481f, 0x40, 0x00},
+	{0x4829, 0x78, 0x00},
+	{0x4837, 0x28, 0x00},
+	{0x4b00, 0x2a, 0x00},
+	{0x4b0d, 0x00, 0x00},
+	{0x4d00, 0x04, 0x00},
+	{0x4d01, 0x42, 0x00},
+	{0x4d02, 0xd1, 0x00},
+	{0x4d03, 0x93, 0x00},
+	{0x4d04, 0xf5, 0x00},
+	{0x4d05, 0xc1, 0x00},
+	{0x5000, 0xf3, 0x00},
+	{0x5001, 0x11, 0x00},
+	{0x5004, 0x00, 0x00},
+	{0x500a, 0x00, 0x00},
+	{0x500b, 0x00, 0x00},
+	{0x5032, 0x00, 0x00},
+	{0x5040, 0x00, 0x00},
+	{0x5050, 0x0c, 0x00},
+	{0x5500, 0x00, 0x00},
+	{0x5501, 0x10, 0x00},
+	{0x5502, 0x01, 0x00},
+	{0x5503, 0x0f, 0x00},
+	{0x8000, 0x00, 0x00},
+	{0x8001, 0x00, 0x00},
+	{0x8002, 0x00, 0x00},
+	{0x8003, 0x00, 0x00},
+	{0x8004, 0x00, 0x00},
+	{0x8005, 0x00, 0x00},
+	{0x8006, 0x00, 0x00},
+	{0x8007, 0x00, 0x00},
+	{0x8008, 0x00, 0x00},
+	{0x3638, 0x00, 0x00},
+	{0x3105, 0x31, 0x00},
+	{0x301a, 0xf9, 0x00},
+	{0x3508, 0x07, 0x00},
+	{0x484b, 0x05, 0x00},
+	{0x4805, 0x03, 0x00},
+	{0x3601, 0x01, 0x00},
+	/* start */
+	{0x0100, 0x01, 10000},
+	{0x3105, 0x11, 0x00},
+	{0x301a, 0xF1, 0x00},
+	{0x4805, 0x00, 0x00},
+	{0x301a, 0xF0, 0x00},
+	{0x3208, 0x00, 0x00},
+	{0x302a, 0x00, 0x00},
+	{0x302a, 0x00, 0x00},
+	{0x302a, 0x00, 0x00},
+	{0x302a, 0x00, 0x00},
+	{0x302a, 0x00, 0x00},
+	{0x3601, 0x00, 0x00},
+	{0x3638, 0x00, 0x00},
+	{0x3208, 0x10, 0x00},
+	{0x3208, 0xa0, 0x00},
+	/* OTP sequency */
+	{0x5000, 0xd3, 0},
+	{0x3d84, 0xc0, 0},
+	{0x3d88, 0x70, 0},
+	{0x3d89, 0x00, 0},
+	{0x3d8a, 0x71, 0},
+	{0x3d8b, 0x3d, 0},
+	{0x3d81, 0x01, 5000},
+};
+
+/* ADD-S: 20150512 s5k3m2 otp read configuration */
+static struct msm_camera_i2c_reg_array sensor_reg_array_s5k3m2_ofilm[] = {
+	{0x0136, 0x1800, 0},
+	{0x0304, 0x0006, 0},
+	{0x0306, 0x006E, 0},
+	{0x030C, 0x0004, 0},
+	{0x030E, 0x006A, 0},
+	{0x0302, 0x0001, 0},
+	{0x0300, 0x0004, 0},
+	{0x030A, 0x0001, 0},
+	{0x0308, 0x0008, 0},
+	{0x0100, 0x0100, 10000},
+};
+/* ADD-E: 20150512 s5k3m2 otp read configuration */
+
+static struct msm_otp_data msm_otp_data_tbl[] = {
+	{OTP_FRONT_CAMERA_ID, msm_get_otp_front_camera_id},
+	{OTP_FRONT_CAMERA_AWB, msm_get_otp_front_camera_awb},
+	{OTP_FRONT_CAMERA_MODULE_ID, msm_get_otp_front_camera_module_id},
+	{OTP_FRONT_CAMERA_ALL, msm_get_otp_front_camera_all},
+	{OTP_REAR_CAMERA_ID, msm_get_otp_rear_camera_id},
+	{OTP_REAR_CAMERA_AWB, msm_get_otp_rear_camera_awb},
+	{OTP_REAR_CAMERA_AF, msm_get_otp_rear_camera_af},
+	{OTP_REAR_CAMERA_OIS, msm_get_otp_rear_camera_ois},
+	{OTP_REAR_CAMERA_PDAF, msm_get_otp_rear_camera_pdaf},
+	{OTP_REAR_CAMERA_MODULE_ID, msm_get_otp_rear_camera_module_id},
+	{OTP_REAR_CAMERA_ALL, msm_get_otp_rear_camera_all}
+};
+
+static struct msm_camera_i2c_reg_setting conf_array=
+{
+	.reg_setting = sensor_reg_array,
+	.size = ARRAY_SIZE(sensor_reg_array),
+	.addr_type = 2,
+	.data_type = 1,
+	.delay = 0,
+};
+
+/* ADD-S: 20150512 s5k3m2 otp read configuration */
+static struct msm_camera_i2c_reg_setting conf_array_s5k3m2_ofilm = {
+	.reg_setting = sensor_reg_array_s5k3m2_ofilm,
+	.size = ARRAY_SIZE(sensor_reg_array_s5k3m2_ofilm),
+	.addr_type = 2,
+	.data_type = 2,
+	.delay = 0,
+};
+/* ADD-E: 20150512 s5k3m2 otp read configuration */
+
+static uint8_t msm_set_ov4688_module_id(
+	uint8_t *otp_buf, uint32_t num)
+{
+	uint8_t flag = 0;
+	/* Group 1 */
+	flag = otp_buf[16];
+	flag = (flag>>6) & 0x3;
+	if (flag == 0x1)
+		return otp_buf[17];
+	/* Group 2 */
+	flag = otp_buf[32];
+	flag = (flag>>6) & 0x3;
+	if (flag == 0x1)
+		return otp_buf[33];
+	/* Group 3 */
+	flag = otp_buf[48];
+	flag = (flag>>6) & 0x3;
+	if (flag == 0x1)
+		return otp_buf[49];
+	else {
+		pr_err("%s: ERR: all of otp data is not valid\n",
+			__func__);
+		return -EINVAL;
+	}
+}
+
+static int msm_set_otp_data(uint8_t *otp_buf, uint32_t num,
+		uint32_t subdev_id, const char *eeprom_name)
+{
+	if (!otp_buf) {
+		pr_err("%s: ERR: otp_buff is NULL\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	if (!eeprom_name) {
+		pr_err("%s: ERR: eeprom_name is NULL\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	if (num > OTP_CAMERA_BUFF_SIZE) {
+		pr_err("%s: ERR: size is overflow %d\n",
+			__func__, num);
+		return -EINVAL;
+	}
+
+	/* MOD-S: 20150512 for eeprom2: qcom,eeprom@2 in dts file */
+	/* if (0 == subdev_id)) { */
+	if ((0 == subdev_id) || (2 == subdev_id)) {
+		/* MOD-E: 20150512 for eeprom2: qcom,eeprom@2 in dts file */
+		msm_rear_otp_type_str.otp_camera_num = num;
+		msm_rear_otp_type_str.module_id = 0;
+		memset(msm_rear_otp_type_str.eeprom_name,
+			0, 19);
+		memcpy(msm_rear_otp_type_str.eeprom_name,
+			eeprom_name, strlen(eeprom_name));
+		memset(msm_rear_otp_type_str.otp_camera_buf,
+			0, OTP_CAMERA_BUFF_SIZE);
+		memcpy(msm_rear_otp_type_str.otp_camera_buf,
+			otp_buf, num);
+		msm_rear_otp_type_str.otp_data_tbl = msm_otp_data_tbl;
+	} else {
+		msm_front_otp_type_str.otp_camera_num = num;
+		msm_front_otp_type_str.module_id = 0;
+		memset(msm_front_otp_type_str.eeprom_name,
+			0, 19);
+		memcpy(msm_front_otp_type_str.eeprom_name,
+			eeprom_name, strlen(eeprom_name));
+		memset(msm_front_otp_type_str.otp_camera_buf,
+			0, OTP_CAMERA_BUFF_SIZE);
+		memcpy(msm_front_otp_type_str.otp_camera_buf,
+			otp_buf, num);
+		msm_front_otp_type_str.otp_data_tbl = msm_otp_data_tbl;
+	}
+
+	return 0;
+}
+
+static int msm_get_otp_front_camera_id(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	int i = 0, j = 0;
+
+	if (size < MSM_OTP_FRONT_CAMERA_ID_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, MSM_OTP_FRONT_CAMERA_ID_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	if (!strncmp(msm_front_otp_type_str.eeprom_name, "ov4688", 6)) {
+		for (i = 0, j = 0; i < 16; i++, j += 2) {
+			snprintf(&otp_buf[j], 36, "%02X",
+				msm_front_otp_type_str.otp_camera_buf[i]);
+		}
+	} else
+		CDBG("%s: WARNING: unknown name %s\n", __func__,
+				msm_front_otp_type_str.eeprom_name);
+
+	return 0;
+}
+
+static int msm_get_otp_front_camera_awb(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	return 0;
+}
+
+static int msm_get_otp_front_camera_module_id(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < MSM_OTP_FRONT_CAMERA_MODULE_ID_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size,
+			MSM_OTP_FRONT_CAMERA_MODULE_ID_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	if (!strncmp(msm_front_otp_type_str.eeprom_name, "ov4688", 6))
+		msm_front_otp_type_str.module_id = msm_set_ov4688_module_id(
+			msm_front_otp_type_str.otp_camera_buf,
+			msm_front_otp_type_str.otp_camera_num);
+	else {
+		pr_err("%s: ERR: unknown sensor name %s\n", __func__,
+				msm_front_otp_type_str.eeprom_name);
+		return -EINVAL;
+	}
+	otp_buf[0] = msm_front_otp_type_str.module_id;
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_id(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	int i = 0, j = 0;
+
+	if (size < MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	for (i = 0, j = 0; i < 8; i++, j += 2)
+		snprintf(&otp_buf[j], MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE, "%02X",
+			msm_rear_otp_type_str.otp_camera_buf[i]);
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_awb(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_af(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < MSM_OTP_REAR_CAMERA_AF_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, MSM_OTP_REAR_CAMERA_AF_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	memcpy(otp_buf, msm_rear_otp_type_str.otp_camera_buf+17, 7);
+	otp_buf[7] = msm_rear_otp_type_str.otp_camera_buf[63];
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_ois(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < MSM_OTP_REAR_CAMERA_OIS_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, MSM_OTP_REAR_CAMERA_OIS_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	memcpy(otp_buf, msm_rear_otp_type_str.otp_camera_buf+24, 34);
+	otp_buf[34] = msm_rear_otp_type_str.otp_camera_buf[63];
+	otp_buf[35] = msm_rear_otp_type_str.otp_camera_buf[71];
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_pdaf(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < MSM_OTP_REAR_CAMERA_PDAF_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, MSM_OTP_REAR_CAMERA_PDAF_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	memcpy(otp_buf, msm_rear_otp_type_str.otp_camera_buf+456, 97);
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_module_id(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	uint32_t n;
+	uint8_t mid;
+
+	if (size < MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size,
+			MSM_OTP_REAR_CAMERA_MODULE_ID_BUFF_SIZE);
+		return -EINVAL;
+	}
+
+	n = msm_rear_otp_type_str.otp_camera_num;
+	mid = msm_rear_otp_type_str.otp_camera_buf[n-1];
+
+	if (!mid &&
+		!strcmp(msm_rear_otp_type_str.eeprom_name, "s5k3m2_ofilm")) {
+		pr_err("s5k3m2_ofilm: get mid 0x%x(0x10)", mid);
+		mid = 0x10;
+	} else
+		pr_err("%s: module_id=0x%x\n",
+			msm_rear_otp_type_str.eeprom_name, mid);
+
+	msm_rear_otp_type_str.module_id = mid;
+	otp_buf[0] = msm_rear_otp_type_str.module_id;
+
+	return 0;
+}
+
+static int msm_get_otp_rear_camera_all(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < msm_rear_otp_type_str.otp_camera_num) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, msm_rear_otp_type_str.otp_camera_num);
+		return -EINVAL;
+	}
+
+	memcpy(otp_buf, msm_rear_otp_type_str.otp_camera_buf,
+		msm_rear_otp_type_str.otp_camera_num);
+
+	return 0;
+}
+
+static int msm_get_otp_front_camera_all(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (size < msm_front_otp_type_str.otp_camera_num) {
+		pr_err("%s: ERR: size is too small %d(%d)\n",
+			__func__, size, msm_front_otp_type_str.otp_camera_num);
+		return -EINVAL;
+	}
+
+	memcpy(otp_buf, msm_front_otp_type_str.otp_camera_buf,
+		msm_front_otp_type_str.otp_camera_num);
+
+	return 0;
+}
+
+int msm_get_otp_data(uint8_t *otp_buf, uint32_t size,
+	uint16_t data_flag)
+{
+	if (data_flag >= OTP_REAR_CAMERA_ID) {
+		if (msm_rear_otp_type_str.otp_camera_num < 1 ||
+		msm_rear_otp_type_str.otp_camera_num > OTP_CAMERA_BUFF_SIZE) {
+			pr_err("%s: ERR: rear_otp_num=%d\n", __func__,
+				msm_rear_otp_type_str.otp_camera_num);
+			return -EINVAL;
+		}
+		if (msm_rear_otp_type_str.otp_camera_buf == NULL) {
+			pr_err("%s: ERR: rear_otp is NULL\n", __func__);
+			return -EINVAL;
+		}
+	} else {
+		if (msm_front_otp_type_str.otp_camera_num < 1 ||
+		msm_front_otp_type_str.otp_camera_num > OTP_CAMERA_BUFF_SIZE) {
+			pr_err("%s: ERR: front_otp_num=%d\n", __func__,
+				msm_front_otp_type_str.otp_camera_num);
+			return -EINVAL;
+		}
+		if (msm_front_otp_type_str.otp_camera_buf == NULL) {
+			pr_err("%s: ERR: front_otp is NULL\n", __func__);
+			return -EINVAL;
+		}
+	}
+	if (data_flag == msm_otp_data_tbl[data_flag].data_type)
+		return msm_otp_data_tbl[data_flag].otp_data_func(otp_buf,
+			size, data_flag);
+	else {
+		pr_err("%s: ERR: data_flag=%d\n", __func__, data_flag);
+		return -EINVAL;
+	}
+}
+EXPORT_SYMBOL(msm_get_otp_data);
+
 /**
   * msm_eeprom_verify_sum - verify crc32 checksum
   * @mem:	data buffer
@@ -138,6 +770,21 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			CDBG("qcom,slave-addr = 0x%X\n",
 				eb_info->i2c_slaveaddr);
 		}
+
+		/* ADD-S: 20150512 s5k3m2 otp read configuration */
+		if (!strncmp(eb_info->eeprom_name, "s5k3m2_ofilm", 12)) {
+			pr_err("%s: s5k3m2 write table\n", __func__);
+			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write_table(
+			&(e_ctrl->i2c_client), &conf_array_s5k3m2_ofilm);
+			if (rc < 0) {
+				pr_err("%s: Err s5k3m2 write table failed\n",
+						__func__);
+				return rc;
+			}
+			msleep(20);
+		}
+		/* ADD-E: 20150512 s5k3m2 otp read configuration */
+
 		if (emap[j].page.valid_size) {
 			e_ctrl->i2c_client.addr_type = emap[j].page.addr_t;
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
@@ -160,6 +807,18 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 				return rc;
 			}
 		}
+		/* ADD-S:  otp read configuration */
+		if (!strncmp(eb_info->eeprom_name, "ov4688", 6)) {
+			pr_err("%s: ov4688 write table\n", __func__);
+			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write_table(&(e_ctrl->i2c_client), &conf_array);
+			if (rc < 0) {
+				pr_err("%s: Err ov4688 write table failed\n",
+						__func__);
+				return rc;
+			}
+			msleep(20);
+		}
+		/* ADD-S:  otp read configuration */
 		if (emap[j].poll.valid_size) {
 			e_ctrl->i2c_client.addr_type = emap[j].poll.addr_t;
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_poll(
@@ -193,6 +852,14 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 			}
 		}
 	}
+	/* ADD-S:  otp read configuration */
+	if (!strncmp(eb_info->eeprom_name, "ov4688", 6)) {
+		pr_err("%s: ov4688 enable 5000[5]\n", __func__);
+		e_ctrl->i2c_client.addr_type = MSM_CAMERA_I2C_WORD_ADDR;
+		e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
+			&(e_ctrl->i2c_client), 0x5000, 0xf3, 1);
+	}
+	/* ADD-S:  otp read configuration */
 	return rc;
 }
 
@@ -373,7 +1040,6 @@ static const struct v4l2_subdev_internal_ops msm_eeprom_internal_ops = {
 	.open = msm_eeprom_open,
 	.close = msm_eeprom_close,
 };
-
 /**
   * msm_eeprom_parse_memory_map() - parse memory map in device node
   * @of:	device node
@@ -844,6 +1510,7 @@ static int eeprom_config_read_cal_data32(struct msm_eeprom_ctrl_t *e_ctrl,
 	cdata.cfgtype = cdata32->cfgtype;
 	cdata.is_supported = cdata32->is_supported;
 	cdata.cfg.read_data.num_bytes = cdata32->cfg.read_data.num_bytes;
+
 	if (e_ctrl->read_eeprom == 0) {
 		rc = msm_camera_power_up(&e_ctrl->eboard_info->power_info,
 			e_ctrl->eeprom_device_type, &e_ctrl->i2c_client);
@@ -956,6 +1623,8 @@ static long msm_eeprom_subdev_fops_ioctl32(struct file *file, unsigned int cmd,
 
 #endif
 
+/* LeTV LIMITED:2016-04-11 [ AMBER-632] mod start */
+#if 0
 static int msm_eeprom_platform_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -1070,6 +1739,7 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	rc = msm_eeprom_parse_memory_map(of_node, &e_ctrl->cal_data);
 	if (rc < 0)
 		goto free_datamap;
+
 	e_ctrl->read_eeprom = 0;
 	v4l2_subdev_init(&e_ctrl->msm_sd.sd,
 		e_ctrl->eeprom_v4l2_subdev_ops);
@@ -1105,6 +1775,205 @@ cciclient_free:
 	kfree(e_ctrl);
 	return rc;
 }
+#else
+static int msm_eeprom_platform_probe(struct platform_device *pdev)
+{
+	int rc = 0;
+	int j = 0;
+	uint32_t temp;
+
+	struct msm_camera_cci_client *cci_client = NULL;
+	struct msm_eeprom_ctrl_t *e_ctrl = NULL;
+	struct msm_eeprom_board_info *eb_info = NULL;
+	struct device_node *of_node = pdev->dev.of_node;
+	struct msm_camera_power_ctrl_t *power_info = NULL;
+
+	CDBG("%s E\n", __func__);
+
+	e_ctrl = kzalloc(sizeof(*e_ctrl), GFP_KERNEL);
+	if (!e_ctrl) {
+		pr_err("%s:%d kzalloc failed\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+	e_ctrl->eeprom_v4l2_subdev_ops = &msm_eeprom_subdev_ops;
+	e_ctrl->eeprom_mutex = &msm_eeprom_mutex;
+
+	e_ctrl->is_supported = 0;
+	if (!of_node) {
+		pr_err("%s dev.of_node NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	rc = of_property_read_u32(of_node, "cell-index",
+		&pdev->id);
+	CDBG("cell-index %d, rc %d\n", pdev->id, rc);
+	if (rc < 0) {
+		pr_err("failed rc %d\n", rc);
+		return rc;
+	}
+	e_ctrl->subdev_id = pdev->id;
+
+	rc = of_property_read_u32(of_node, "qcom,cci-master",
+		&e_ctrl->cci_master);
+	CDBG("qcom,cci-master %d, rc %d\n", e_ctrl->cci_master, rc);
+	if (rc < 0) {
+		pr_err("%s failed rc %d\n", __func__, rc);
+		return rc;
+	}
+	rc = of_property_read_u32(of_node, "qcom,slave-addr",
+		&temp);
+	if (rc < 0) {
+		pr_err("%s failed rc %d\n", __func__, rc);
+		return rc;
+	}
+
+	/* Set platform device handle */
+	e_ctrl->pdev = pdev;
+	/* Set device type as platform device */
+	e_ctrl->eeprom_device_type = MSM_CAMERA_PLATFORM_DEVICE;
+	e_ctrl->i2c_client.i2c_func_tbl = &msm_eeprom_cci_func_tbl;
+	e_ctrl->i2c_client.cci_client = kzalloc(sizeof(
+		struct msm_camera_cci_client), GFP_KERNEL);
+	if (!e_ctrl->i2c_client.cci_client) {
+		pr_err("%s failed no memory\n", __func__);
+		return -ENOMEM;
+	}
+
+	e_ctrl->eboard_info = kzalloc(sizeof(
+		struct msm_eeprom_board_info), GFP_KERNEL);
+	if (!e_ctrl->eboard_info) {
+		pr_err("%s failed line %d\n", __func__, __LINE__);
+		rc = -ENOMEM;
+		goto cciclient_free;
+	}
+	eb_info = e_ctrl->eboard_info;
+	power_info = &eb_info->power_info;
+	eb_info->i2c_slaveaddr = temp;
+
+	power_info->clk_info = cam_8974_clk_info;
+	power_info->clk_info_size = ARRAY_SIZE(cam_8974_clk_info);
+	power_info->dev = &pdev->dev;
+
+
+	rc = of_property_read_u32(of_node, "qcom,i2c-freq-mode",
+		&eb_info->i2c_freq_mode);
+	if (rc < 0 || (eb_info->i2c_freq_mode >= I2C_MAX_MODES)) {
+		eb_info->i2c_freq_mode = I2C_STANDARD_MODE;
+		CDBG("%s Default I2C standard speed mode.\n", __func__);
+	}
+
+	CDBG("qcom,slave-addr = 0x%X\n", eb_info->i2c_slaveaddr);
+	cci_client = e_ctrl->i2c_client.cci_client;
+	cci_client->cci_subdev = msm_cci_get_subdev();
+	cci_client->cci_i2c_master = e_ctrl->cci_master;
+	cci_client->sid = eb_info->i2c_slaveaddr >> 1;
+	cci_client->retries = 3;
+	cci_client->id_map = 0;
+	cci_client->i2c_freq_mode = eb_info->i2c_freq_mode;
+
+	rc = of_property_read_string(of_node, "qcom,eeprom-name",
+		&eb_info->eeprom_name);
+	CDBG("%s qcom,eeprom-name %s, rc %d\n", __func__,
+		eb_info->eeprom_name, rc);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto board_free;
+	}
+
+	rc = msm_eeprom_cmm_dts(e_ctrl->eboard_info, of_node);
+	if (rc < 0)
+		CDBG("%s MM data miss:%d\n", __func__, __LINE__);
+
+	rc = msm_eeprom_get_dt_data(e_ctrl);
+	if (rc)
+		goto board_free;
+
+	rc = msm_eeprom_parse_memory_map(of_node, &e_ctrl->cal_data);
+	if (rc < 0)
+		goto board_free;
+
+	rc = msm_camera_power_up(power_info, e_ctrl->eeprom_device_type,
+		&e_ctrl->i2c_client);
+	if (rc) {
+		pr_err("failed rc %d\n", rc);
+		goto memdata_free;
+	}
+	rc = read_eeprom_memory(e_ctrl, &e_ctrl->cal_data);
+	if (rc < 0) {
+		pr_err("%s read_eeprom_memory failed\n", __func__);
+		goto power_down;
+	}
+
+	pr_err("%s: module_id is 0x%x\n", eb_info->eeprom_name,
+		e_ctrl->cal_data.mapdata[e_ctrl->cal_data.num_data-1]);
+
+	if (!e_ctrl->cal_data.mapdata[e_ctrl->cal_data.num_data-1] &&
+		!strcmp(eb_info->eeprom_name, "s5k3m2_ofilm")) {
+		pr_err("s5k3m2_ofilm: WARN: module_id is 0x0(0x10)\n");
+		for (j = 0; j < e_ctrl->cal_data.num_data; j++)
+			pr_err("memory_data[%d] = 0x%X\n", j,
+				e_ctrl->cal_data.mapdata[j]);
+	} else {
+		for (j = 0; j < e_ctrl->cal_data.num_data; j++)
+			CDBG("memory_data[%d] = 0x%X\n", j,
+				e_ctrl->cal_data.mapdata[j]);
+	}
+
+	rc = msm_set_otp_data(e_ctrl->cal_data.mapdata,
+		e_ctrl->cal_data.num_data, e_ctrl->subdev_id,
+			eb_info->eeprom_name);
+	if (rc < 0)
+		pr_err("%s set otp data failed %d\n", __func__, rc);
+
+	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data);
+
+	rc = msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
+		&e_ctrl->i2c_client);
+	if (rc) {
+		pr_err("failed rc %d\n", rc);
+		goto memdata_free;
+	}
+	v4l2_subdev_init(&e_ctrl->msm_sd.sd,
+		e_ctrl->eeprom_v4l2_subdev_ops);
+	v4l2_set_subdevdata(&e_ctrl->msm_sd.sd, e_ctrl);
+	platform_set_drvdata(pdev, &e_ctrl->msm_sd.sd);
+	e_ctrl->msm_sd.sd.internal_ops = &msm_eeprom_internal_ops;
+	e_ctrl->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	snprintf(e_ctrl->msm_sd.sd.name,
+		ARRAY_SIZE(e_ctrl->msm_sd.sd.name), "msm_eeprom");
+	media_entity_init(&e_ctrl->msm_sd.sd.entity, 0, NULL, 0);
+	e_ctrl->msm_sd.sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV;
+	e_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_EEPROM;
+	msm_sd_register(&e_ctrl->msm_sd);
+
+#ifdef CONFIG_COMPAT
+	msm_eeprom_v4l2_subdev_fops = v4l2_subdev_fops;
+	msm_eeprom_v4l2_subdev_fops.compat_ioctl32 =
+		msm_eeprom_subdev_fops_ioctl32;
+	e_ctrl->msm_sd.sd.devnode->fops = &msm_eeprom_v4l2_subdev_fops;
+#endif
+        e_ctrl->read_eeprom = 1;//set read_eeprom flag
+	e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
+	pr_err("%s read_eeprom = %d,is_supported = %d\n", __func__,
+		e_ctrl->read_eeprom,e_ctrl->is_supported);
+	CDBG("%s X\n", __func__);
+	return rc;
+
+power_down:
+	msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
+		&e_ctrl->i2c_client);
+memdata_free:
+	kfree(e_ctrl->cal_data.mapdata);
+	kfree(e_ctrl->cal_data.map);
+board_free:
+	kfree(e_ctrl->eboard_info);
+cciclient_free:
+	kfree(e_ctrl->i2c_client.cci_client);
+	kfree(e_ctrl);
+	return rc;
+}
+#endif
+/* LeTV LIMITED:2016-04-11 [ AMBER-632] mod end */
 
 static int msm_eeprom_platform_remove(struct platform_device *pdev)
 {
