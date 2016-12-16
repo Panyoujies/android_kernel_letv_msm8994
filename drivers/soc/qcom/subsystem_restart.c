@@ -34,6 +34,8 @@
 #include <linux/of_gpio.h>
 #include <linux/cdev.h>
 #include <linux/platform_device.h>
+#include <linux/panic_reason.h>
+
 #include <soc/qcom/subsystem_restart.h>
 #include <soc/qcom/subsystem_notif.h>
 #include <soc/qcom/socinfo.h>
@@ -918,14 +920,96 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 	spin_unlock_irqrestore(&track->s_lock, flags);
 }
 
+#define MODEM_EFS_ERASE_FLG_OFFSET (0x500000)//1M size, for the letvconfig2 is 10M size, the last_kmsg use the first 1M size.
+static char *letvconfig2 = "/dev/block/bootdevice/by-name/letvconfig2";
+static struct file *filp_parti = NULL;
+
+struct file * open_storage_dev(void)
+{
+	struct file * filp = filp_parti;
+
+	if (filp == NULL) {
+		filp = filp_open(letvconfig2, O_RDWR, 0);
+		if (IS_ERR_OR_NULL(filp)) {
+			filp = NULL;
+		} else if ((NULL == filp->f_op) || (NULL == filp->f_op->write) || (NULL == filp->f_op->read)) {
+			filp_close(filp, NULL);
+		} else {
+			filp_parti = filp;
+		}
+	}
+
+	return filp_parti;
+}
+
+extern u32 modem_nospc_flg;
+
 static void device_restart_work_hdlr(struct work_struct *work)
 {
+	struct file *filp = NULL;
+	u32 erase_modem_efs_flg = 0xaa55aa55;
+	u32 erase_modem_efs_flg_rb0 = 0;
+	u32 erase_modem_efs_flg_rb1 = 0;
+	ssize_t len = 0;
+	u32 try_cnt = 0;
+	u32 try_cnt1 = 0;
+
 	struct subsys_device *dev = container_of(work, struct subsys_device,
 							device_restart_work);
+	if(modem_nospc_flg == 1)
+	{
+		pr_err("Modem EFS ENOSPC erro occur.\n");
+		filp = open_storage_dev();
+		filp->f_pos = MODEM_EFS_ERASE_FLG_OFFSET;
+		len = filp->f_op->read(filp, (void*)&erase_modem_efs_flg_rb0,sizeof(erase_modem_efs_flg_rb0), &(filp->f_pos));
+		filp_close(filp_parti, NULL);
+		pr_err("Read letvconfig2 partition power on value is %x .\n",erase_modem_efs_flg_rb0);
+
+tryagain:
+		filp = open_storage_dev();
+		if(filp != NULL)
+		{
+			pr_err("Open letvconfig2 partition success.\n");
+			filp->f_pos = MODEM_EFS_ERASE_FLG_OFFSET;
+			len = filp->f_op->write(filp, (void*)&erase_modem_efs_flg,sizeof(erase_modem_efs_flg), &(filp->f_pos));
+			vfs_fsync(filp, false);
+			filp_close(filp_parti, NULL);
+			filp_parti = NULL;
+			if(len != sizeof(erase_modem_efs_flg))
+			{
+				pr_err("Write ENOSPC erro flg partition failed %d times.\n",try_cnt1);
+				try_cnt1++;
+				if(try_cnt1 <= 3)
+					goto tryagain;
+			}
+			else
+			{
+				set_rst_level_soc(dev);
+				pr_err("Write ENOSPC erro flg partition success.\n");
+			}
+		}
+		else
+		{
+			pr_err("Open letvconfig2 partition failed %d times.\n",try_cnt);
+			try_cnt++;
+			if(try_cnt <= 3)
+				goto tryagain;
+		}
+
+	filp = open_storage_dev();
+	filp->f_pos = MODEM_EFS_ERASE_FLG_OFFSET;
+	len = filp->f_op->read(filp, (void*)&erase_modem_efs_flg_rb1,sizeof(erase_modem_efs_flg_rb1), &(filp->f_pos));
+	filp_close(filp_parti, NULL);
+	pr_err("Readback letvconfig2 partition value is %x .\n",erase_modem_efs_flg_rb1);
+	}
 
 	notify_each_subsys_device(&dev, 1, SUBSYS_SOC_RESET, NULL);
 	panic("subsys-restart: Resetting the SoC - %s crashed.",
 							dev->desc->name);
+}
+void set_rst_level_soc(struct subsys_device *dev)
+{
+	dev->restart_level=RESET_SOC;
 }
 
 int subsystem_restart_dev(struct subsys_device *dev)
@@ -967,6 +1051,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		__subsystem_restart_dev(dev);
 		break;
 	case RESET_SOC:
+		set_panic_trig_rsn(TRIG_SUB_SYSTEM_RESET);
 		__pm_stay_awake(&dev->ssr_wlock);
 		schedule_work(&dev->device_restart_work);
 		return 0;

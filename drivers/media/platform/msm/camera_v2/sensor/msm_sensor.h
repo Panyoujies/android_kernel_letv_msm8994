@@ -89,6 +89,10 @@ struct msm_sensor_ctrl_t {
 	uint32_t set_mclk_23880000;
 };
 
+#ifndef LETV_SINGLE_MODULE_VENDOR
+extern int msm_get_otp_data(uint8_t*, uint32_t, uint16_t);
+#endif
+
 int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp);
 
 int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl);

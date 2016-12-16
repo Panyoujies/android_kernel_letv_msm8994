@@ -37,6 +37,7 @@
 #include <asm/system_misc.h>
 
 #include <trace/events/exception.h>
+#include <linux/panic_reason.h>
 
 static const char *handler[]= {
 	"prefetch abort",
@@ -473,6 +474,7 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason)
 {
 	console_verbose();
 
+	set_panic_trig_rsn(TRIG_BAD_MODE);
 	printk(KERN_CRIT "Bad mode in %s handler detected\n", handler[reason]);
 
 	die("Oops - bad mode", regs, 0);

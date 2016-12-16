@@ -1068,6 +1068,12 @@ config SERIAL_MSM_HSL_CONSOLE
 	select SERIAL_CORE_CONSOLE
 	default n
 
+config CONSOLE_DYNAMIC_ENABLE
+	bool "console enabled depend on cmd line parameters"
+	depends on SERIAL_MSM_HSL_CONSOLE=y
+	select SERIAL_CORE_CONSOLE
+	default n
+
 config SERIAL_BCM_BT_LPM
 	tristate "Broadcom Bluetooth Low Power Mode"
 	depends on ARM && ARCH_MSM

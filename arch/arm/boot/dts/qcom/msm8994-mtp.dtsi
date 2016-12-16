@@ -415,7 +415,28 @@
 	};
 
 	i2c@f9928000 { /* BLSP1 QUP6 */
-		status = "ok";
+		status = "disabled";
+		nfc-nci@e {
+			compatible = "qcom,nfc-nci";
+			reg = <0x0e>;
+			qcom,irq-gpio = <&msm_gpio 29 0x00>;
+			qcom,dis-gpio = <&msm_gpio 30 0x00>;
+			qcom,clk-src = "BBCLK2";
+			interrupt-parent = <&msm_gpio>;
+			interrupts = <29 0>;
+			interrupt-names = "nfc_irq";
+			pinctrl-names = "nfc_active","nfc_suspend";
+			pinctrl-0 = <&nfc_int_active &nfc_disable_active>;
+			pinctrl-1 = <&nfc_int_suspend &nfc_disable_suspend>;
+			qcom,clk-gpio = <&pm8994_gpios 10 0>;
+			qcom,pwr-req-gpio = <&pm8994_gpios 7 0>;
+			clocks = <&clock_rpm clk_bb_clk2_pin>;
+			clock-names = "ref_clk";
+		};
+	};
+
+	i2c@f9966000 { /* BLSP2 QUP4 */
+		status = "disabled";
 		nfc-nci@e {
 			compatible = "qcom,nfc-nci";
 			reg = <0x0e>;
@@ -679,6 +700,7 @@
 	};
 };
 
+#if 0
 &pmi8994_mpps {
 	mpp@a300 { /* MPP 4 */
 		/* WLED FET */
@@ -688,6 +710,7 @@
 		status = "okay";
 	};
 };
+#endif
 
 &blsp2_uart2 {
 	status = "ok";

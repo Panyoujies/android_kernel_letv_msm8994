@@ -48,6 +48,7 @@
 #include <soc/qcom/msm-core.h>
 #include <linux/cpumask.h>
 #include <linux/suspend.h>
+#include <linux/panic_reason.h>
 
 #define CREATE_TRACE_POINTS
 #define TRACE_MSM_THERMAL
@@ -2322,8 +2323,10 @@ static void msm_thermal_bite(int tsens_id, long temp)
 {
 	struct scm_desc desc;
 
+	set_panic_trig_rsn(TRIG_OVER_TEMPERATURE);
 	pr_err("TSENS:%d reached temperature:%ld. System reset\n",
 		tsens_id, temp);
+
 	if (!is_scm_armv8()) {
 		scm_call_atomic1(SCM_SVC_BOOT, THERM_SECURE_BITE_CMD, 0);
 	} else {

@@ -12,6 +12,7 @@
 
 #define SENSOR_DRIVER_I2C "camera"
 /* Header file declaration */
+#include <media/msm_cam_sensor.h>
 #include "msm_sensor.h"
 #include "msm_sd.h"
 #include "camera.h"
@@ -26,8 +27,45 @@
 
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
 
+static uint8_t g_front_camera_lot_id[MSM_OTP_FRONT_CAMERA_ID_BUFF_SIZE];
+static uint8_t g_rear_camera_lot_id[MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE];
+
+extern int msm_get_otp_data(uint8_t*, uint32_t, uint16_t);
+
+static ssize_t fcid_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, 33, "%s", g_front_camera_lot_id);
+}
+
+static ssize_t bcid_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, 17, "%s", g_rear_camera_lot_id);
+}
+
+static DEVICE_ATTR(fcid, S_IRUGO, fcid_show, NULL);
+static DEVICE_ATTR(bcid, S_IRUGO, bcid_show, NULL);
+
 /* Static declaration */
 static struct msm_sensor_ctrl_t *g_sctrl[MAX_CAMERAS];
+/* Get camerainfo struct */
+struct msm_camera_sensor_slave_info *msm_get_camera_slave_info
+			(enum msm_sensor_camera_id_t cam_id)
+{
+	if (g_sctrl[cam_id] == NULL) {
+		pr_err("%s: g_sctrl[%d] is NULL\n", __func__, cam_id);
+		return NULL;
+	}
+	return g_sctrl[cam_id]->sensordata->cam_slave_info;
+}
+
+int msm_sensor_power_onoff(int onoff)
+{
+	if (onoff)
+		return msm_sensor_power_up(g_sctrl[0]);
+	else
+		return msm_sensor_power_down(g_sctrl[0]);
+}
+EXPORT_SYMBOL(msm_sensor_power_onoff);
 
 static int msm_sensor_platform_remove(struct platform_device *pdev)
 {
@@ -178,14 +216,36 @@ static int32_t msm_sensor_fill_eeprom_subdevid_by_name(
 
 	CDBG("Try to find eeprom subdev for %s\n",
 			s_ctrl->sensordata->eeprom_name);
-	p = of_get_property(of_node, "qcom,eeprom-src", &count);
+
+	/* MOD-S: 20150512, For analyzing qcom,eeprom-src-s5k3m2 in dts */
+	/* p = of_get_property(of_node, "qcom,eeprom-src", &count); */
+	if (!strncmp(s_ctrl->sensordata->eeprom_name,
+		"s5k3m2_ofilm", 12)) {
+		p = of_get_property(of_node,
+		"qcom,eeprom-src-s5k3m2", &count);
+	} else {
+		p = of_get_property(of_node, "qcom,eeprom-src", &count);
+	}
+	/* MOD-E: 20150512, For analyzing qcom,eeprom-src-s5k3m2 in dts */
+
 	if (!p || !count)
 		return 0;
 
 	count /= sizeof(uint32_t);
 	for (i = 0; i < count; i++) {
 		eeprom_name = NULL;
-		src_node = of_parse_phandle(of_node, "qcom,eeprom-src", i);
+
+		/* MOD-S: 20150512,analyzing qcom,eeprom-src-s5k3m2 in dts */
+		if (!strncmp(s_ctrl->sensordata->eeprom_name,
+			"s5k3m2_ofilm", 12)) {
+			src_node = of_parse_phandle(of_node,
+			"qcom,eeprom-src-s5k3m2", i);
+		} else {
+			src_node = of_parse_phandle(of_node,
+			"qcom,eeprom-src", i);
+		}
+		/* MOD-E: 20150512,analyzing qcom,eeprom-src-s5k3m2 in dts */
+
 		if (!src_node) {
 			pr_err("eeprom src node NULL\n");
 			continue;
@@ -623,6 +683,8 @@ static void msm_sensor_fill_sensor_info(struct msm_sensor_ctrl_t *s_ctrl,
 
 	strlcpy(entity_name, s_ctrl->msm_sd.sd.entity.name, MAX_SENSOR_NAME);
 }
+/* camerainfo struct */
+extern struct msm_camera_sensor_slave_info *camera_slave_info[MAX_CAMERAS];
 
 /* static function definition */
 int32_t msm_sensor_driver_probe(void *setting,
@@ -729,6 +791,10 @@ int32_t msm_sensor_driver_probe(void *setting,
 	CDBG("power up size %d power down size %d\n",
 		slave_info->power_setting_array.size,
 		slave_info->power_setting_array.size_down);
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	CDBG("sensor_id 0x%x", slave_info->sensor_id_info.sensor_id);
+	CDBG("module_id 0x%x", slave_info->sensor_id_info.module_id);
+#endif
 
 	if (slave_info->is_init_params_valid) {
 		CDBG("position %d",
@@ -801,8 +867,11 @@ int32_t msm_sensor_driver_probe(void *setting,
 	camera_info->sensor_id_reg_addr =
 		slave_info->sensor_id_info.sensor_id_reg_addr;
 	camera_info->sensor_id = slave_info->sensor_id_info.sensor_id;
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	camera_info->camera_id = slave_info->camera_id;
+	camera_info->module_id = slave_info->sensor_id_info.module_id;
+#endif
 	camera_info->sensor_id_mask = slave_info->sensor_id_info.sensor_id_mask;
-
 	/* Fill CCI master, slave address and CCI default params */
 	if (!s_ctrl->sensor_i2c_client) {
 		pr_err("failed: sensor_i2c_client %p",
@@ -943,6 +1012,8 @@ int32_t msm_sensor_driver_probe(void *setting,
 	s_ctrl->sensordata->cam_slave_info = slave_info;
 
 	msm_sensor_fill_sensor_info(s_ctrl, probed_info, entity_name);
+	/* Save sensor info into camerainfo struct */
+	camera_slave_info[slave_info->sensor_init_params.position] = slave_info;
 
 	return rc;
 
@@ -1207,6 +1278,7 @@ FREE_SENSOR_I2C_CLIENT:
 static int32_t msm_sensor_driver_platform_probe(struct platform_device *pdev)
 {
 	int32_t rc = 0;
+	int err=0;
 	struct msm_sensor_ctrl_t *s_ctrl = NULL;
 
 	/* Create sensor control structure */
@@ -1234,6 +1306,40 @@ static int32_t msm_sensor_driver_platform_probe(struct platform_device *pdev)
 
 	/* Fill device in power info */
 	s_ctrl->sensordata->power_info.dev = &pdev->dev;
+
+	if (!strncmp(pdev->name, "0.qcom,camera",
+		strlen("0.qcom,camera"))) {
+		err = sysfs_create_file(&pdev->dev.kobj,& dev_attr_bcid.attr);
+		if (err) {
+			dev_err(&pdev->dev, "Failed to create REAR sensor sysfs files: %d\n", err);
+		}
+
+		memset(g_rear_camera_lot_id,
+			0, MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE);
+
+		err = msm_get_otp_data(g_rear_camera_lot_id,
+			MSM_OTP_REAR_CAMERA_ID_BUFF_SIZE, OTP_REAR_CAMERA_ID);
+		if (err < 0) {
+			pr_err("failed: get rear camera %s : err %d", pdev->name, err);
+		}
+	} else if (!strncmp(pdev->name, "2.qcom,camera",
+		strlen("2.qcom,camera"))) {
+		err = sysfs_create_file(&pdev->dev.kobj,&dev_attr_fcid.attr);
+		if (err) {
+			dev_err(&pdev->dev, "Failed to create FRONT sensor sysfs files: %d\n", err);
+		}
+
+		memset(g_front_camera_lot_id, 0,
+			MSM_OTP_FRONT_CAMERA_ID_BUFF_SIZE);
+
+		err = msm_get_otp_data(g_front_camera_lot_id,
+			MSM_OTP_FRONT_CAMERA_ID_BUFF_SIZE, OTP_FRONT_CAMERA_ID);
+		if (err < 0) {
+			pr_err("failed: get front camera %s : otp data err %d", pdev->name, err);
+		}
+	} else
+		pr_err("%s: failed UNKNOWN DEVICE", __func__);
+
 	return rc;
 FREE_S_CTRL:
 	kfree(s_ctrl);

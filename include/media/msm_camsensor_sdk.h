@@ -159,6 +159,7 @@ enum msm_flash_driver_type {
 	FLASH_DRIVER_PMIC,
 	FLASH_DRIVER_I2C,
 	FLASH_DRIVER_GPIO,
+	FLASH_DRIVER_LM3643,
 	FLASH_DRIVER_DEFAULT
 };
 
@@ -200,6 +201,9 @@ struct msm_sensor_id_info_t {
 	unsigned short sensor_id_reg_addr;
 	unsigned short sensor_id;
 	unsigned short sensor_id_mask;
+#ifndef LETV_SINGLE_MODULE_VENDOR
+	unsigned short module_id;
+#endif
 };
 
 struct msm_camera_sensor_slave_info {

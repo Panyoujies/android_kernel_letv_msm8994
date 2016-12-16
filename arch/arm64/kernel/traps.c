@@ -42,6 +42,7 @@
 #include <asm/edac.h>
 
 #include <trace/events/exception.h>
+#include <linux/panic_reason.h>
 
 static const char *handler[]= {
 	"Synchronous Abort",
@@ -414,6 +415,7 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
 	void __user *pc = (void __user *)instruction_pointer(regs);
 	console_verbose();
 
+	set_panic_trig_rsn(TRIG_BAD_MODE);
 	pr_crit("Bad mode in %s handler detected, code 0x%08x\n",
 		handler[reason], esr);
 	__show_regs(regs);

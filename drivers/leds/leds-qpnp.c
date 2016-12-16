@@ -26,7 +26,13 @@
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/delay.h>
-
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
+/*
+#define KEY_LED_FB_CALLBACK
+*/
 #define WLED_MOD_EN_REG(base, n)	(base + 0x60 + n*0x10)
 #define WLED_IDAC_DLY_REG(base, n)	(WLED_MOD_EN_REG(base, n) + 0x01)
 #define WLED_FULL_SCALE_REG(base, n)	(WLED_IDAC_DLY_REG(base, n) + 0x01)
@@ -249,6 +255,15 @@
 #define KPDBL_MODULE_EN_MASK		0x80
 #define NUM_KPDBL_LEDS			4
 #define KPDBL_MASTER_BIT_INDEX		0
+#define LED_DEV_BUFF_SIZE			50
+
+#define CONFIG_DEEP_SLEEP_LED_SWITCH
+
+#ifdef CONFIG_DEEP_SLEEP_LED_SWITCH
+static int deep_sleep_gpio_level;
+static int deep_sleep_gpio_num;
+static const char *deep_sleep_gpio_label;
+#endif
 
 /**
  * enum qpnp_leds - QPNP supported led ids
@@ -555,6 +570,11 @@ struct qpnp_led_data {
 	bool                    in_order_command_processing;
 	int			turn_off_delay_ms;
 };
+
+#ifdef KEY_LED_FB_CALLBACK
+struct qpnp_led_data *touch_key_led;
+struct notifier_block touch_key_fb_notif;
+#endif
 
 static DEFINE_MUTEX(flash_lock);
 static struct pwm_device *kpdbl_master;
@@ -2243,6 +2263,18 @@ static ssize_t pwm_us_store(struct device *dev,
 	return count;
 }
 
+static ssize_t pause_lo_show(struct device *dev,
+	struct device_attribute *attr,
+	char *buf)
+{
+	struct qpnp_led_data *led;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+	return snprintf(buf,
+			LED_DEV_BUFF_SIZE, "%d\n",
+			led->rgb_cfg->pwm_cfg->lut_params.lut_pause_lo);
+}
+
 static ssize_t pause_lo_store(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
@@ -2407,6 +2439,18 @@ static ssize_t start_idx_store(struct device *dev,
 	}
 	qpnp_led_set(&led->cdev, led->cdev.brightness);
 	return count;
+}
+
+static ssize_t ramp_step_ms_show(struct device *dev,
+	struct device_attribute *attr,
+	char *buf)
+{
+	struct qpnp_led_data *led;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+	return snprintf(buf,
+			LED_DEV_BUFF_SIZE, "%d\n",
+			led->rgb_cfg->pwm_cfg->lut_params.ramp_step_ms);
 }
 
 static ssize_t ramp_step_ms_store(struct device *dev,
@@ -2656,6 +2700,18 @@ static void led_blink(struct qpnp_led_data *led,
 	mutex_unlock(&led->lock);
 }
 
+static ssize_t blink_show(struct device *dev,
+	struct device_attribute *attr,	char *buf)
+{
+	struct qpnp_led_data *led;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+	return snprintf(buf,
+					LED_DEV_BUFF_SIZE,
+					"%d\n",
+					led->rgb_cfg->pwm_cfg->blinking);
+}
+
 static ssize_t blink_store(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
@@ -2687,19 +2743,67 @@ static ssize_t blink_store(struct device *dev,
 		dev_err(&led->spmi_dev->dev, "Invalid LED id type for blink\n");
 		return -EINVAL;
 	}
+	if (blinking)
+		led->rgb_cfg->pwm_cfg->blinking = blinking;
 	return count;
 }
+
+#ifdef CONFIG_DEEP_SLEEP_LED_SWITCH
+static ssize_t sleep_show(struct device *dev,
+	struct device_attribute *attr,	char *buf)
+{
+	struct qpnp_led_data *led;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+	return snprintf(buf,
+					LED_DEV_BUFF_SIZE,
+					"%d\n",
+					deep_sleep_gpio_level);
+}
+
+static ssize_t sleep_store(struct device *dev,
+	struct device_attribute *attr,
+	const char *buf, size_t count)
+{
+	unsigned long sleep_gpio_level;
+	ssize_t ret = -EINVAL;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	ret = kstrtoul(buf, 10, &sleep_gpio_level);
+
+	if (ret)
+		return ret;
+
+	if (sleep_gpio_level > 0)
+		sleep_gpio_level = 1;
+	else
+		qpnp_led_set(led_cdev, 0);
+
+	if (deep_sleep_gpio_level != sleep_gpio_level) {
+
+		deep_sleep_gpio_level = sleep_gpio_level;
+		gpio_set_value(deep_sleep_gpio_num, deep_sleep_gpio_level);
+	}
+	return count;
+}
+#endif
 
 static DEVICE_ATTR(led_mode, 0664, NULL, led_mode_store);
 static DEVICE_ATTR(strobe, 0664, NULL, led_strobe_type_store);
 static DEVICE_ATTR(pwm_us, 0664, NULL, pwm_us_store);
-static DEVICE_ATTR(pause_lo, 0664, NULL, pause_lo_store);
+static DEVICE_ATTR(pause_lo, 0664, pause_lo_show, pause_lo_store);
 static DEVICE_ATTR(pause_hi, 0664, NULL, pause_hi_store);
 static DEVICE_ATTR(start_idx, 0664, NULL, start_idx_store);
-static DEVICE_ATTR(ramp_step_ms, 0664, NULL, ramp_step_ms_store);
+static DEVICE_ATTR(ramp_step_ms, 0664, ramp_step_ms_show, ramp_step_ms_store);
 static DEVICE_ATTR(lut_flags, 0664, NULL, lut_flags_store);
 static DEVICE_ATTR(duty_pcts, 0664, NULL, duty_pcts_store);
-static DEVICE_ATTR(blink, 0664, NULL, blink_store);
+static DEVICE_ATTR(blink, 0664, blink_show, blink_store);
+
+#ifdef CONFIG_DEEP_SLEEP_LED_SWITCH
+static DEVICE_ATTR(sleep_sign, 0664, sleep_show, sleep_store);
+#endif
+
+
 
 static struct attribute *led_attrs[] = {
 	&dev_attr_led_mode.attr,
@@ -2728,6 +2832,9 @@ static struct attribute *lpg_attrs[] = {
 
 static struct attribute *blink_attrs[] = {
 	&dev_attr_blink.attr,
+#ifdef CONFIG_DEEP_SLEEP_LED_SWITCH
+	&dev_attr_sleep_sign.attr,
+#endif
 	NULL
 };
 
@@ -3853,6 +3960,32 @@ err_config_gpio:
 	return rc;
 }
 
+#ifdef KEY_LED_FB_CALLBACK
+static int touch_key_fb_notifier_callback(struct notifier_block *self,
+				 unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+
+	if (touch_key_led == NULL)
+		return 0;
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
+			blank = evdata->data;
+			if (*blank == FB_BLANK_UNBLANK)
+				/*
+				 * modify default value(200 -> 0)
+				 * set brightness by userspace
+				 */
+				qpnp_led_set(&touch_key_led->cdev, 0);
+			else if (*blank == FB_BLANK_POWERDOWN)
+				qpnp_led_set(&touch_key_led->cdev, 0);
+	}
+
+	return 0;
+}
+#endif
+
 static int qpnp_leds_probe(struct spmi_device *spmi)
 {
 	struct qpnp_led_data *led, *led_array;
@@ -3893,6 +4026,24 @@ static int qpnp_leds_probe(struct spmi_device *spmi)
 		}
 		led->base = led_resource->start;
 
+#ifdef CONFIG_DEEP_SLEEP_LED_SWITCH
+		if (strncmp(led_label, "rgb", 3) == 0) {
+			deep_sleep_gpio_num =
+				of_get_named_gpio(node,
+				"deepsleep_gpio", 0);
+			deep_sleep_gpio_label =
+				of_get_property(node,
+				"deepsleep_gpio_lable", NULL);
+		}
+		if (deep_sleep_gpio_label != NULL && deep_sleep_gpio_num) {
+			deep_sleep_gpio_level = 0;
+			gpio_request(deep_sleep_gpio_num,
+				deep_sleep_gpio_label);
+			gpio_direction_output(deep_sleep_gpio_num,
+				deep_sleep_gpio_level);
+		}
+#endif
+
 		rc = of_property_read_string(temp, "label", &led_label);
 		if (rc < 0) {
 			dev_err(&led->spmi_dev->dev,
@@ -3907,6 +4058,14 @@ static int qpnp_leds_probe(struct spmi_device *spmi)
 				"Failure reading led name, rc = %d\n", rc);
 			goto fail_id_check;
 		}
+
+#ifdef KEY_LED_FB_CALLBACK
+		if (strncmp(led->cdev.name, "button-backlight", sizeof("button-backlight")) == 0) {
+			touch_key_led = led;
+			touch_key_fb_notif.notifier_call = touch_key_fb_notifier_callback;
+			fb_register_client(&touch_key_fb_notif);
+		}
+#endif
 
 		rc = of_property_read_u32(temp, "qcom,max-current",
 			&led->max_current);

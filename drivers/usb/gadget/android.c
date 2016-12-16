@@ -386,6 +386,12 @@ static void android_pm_qos_work(struct work_struct *data)
 			msecs_to_jiffies(1000*next_sample_delay_sec));
 }
 
+int usb_configured;
+int is_usb_configured(void)
+{
+	return usb_configured;
+}
+
 enum android_device_state {
 	USB_DISCONNECTED,
 	USB_CONNECTED,
@@ -462,9 +468,12 @@ static void android_work(struct work_struct *data)
 		 * Before sending out CONFIGURED uevent give function drivers
 		 * a chance to wakeup userspace threads and notify disconnect
 		 */
-		if (uevent_envp == configured)
+		if (uevent_envp == configured) {
 			msleep(50);
-
+			usb_configured = 1;
+		} else {
+			usb_configured = 0;
+		}
 		/* Do not notify on suspend / resume */
 		if (next_state != USB_SUSPENDED && next_state != USB_RESUMED) {
 			kobject_uevent_env(&dev->dev->kobj, KOBJ_CHANGE,

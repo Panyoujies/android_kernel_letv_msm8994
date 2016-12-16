@@ -53,6 +53,13 @@
 #include <linux/msm-bus.h>
 #include "msm_serial_hs_hwreg.h"
 
+#ifdef CONFIG_CONSOLE_DYNAMIC_ENABLE
+#define CONSOLE_STATE_CMDLINE_MAX 30
+#define CONSOLE_NAME_CMDLINE_MAX 30
+extern char g_console_name[CONSOLE_NAME_CMDLINE_MAX];
+extern char g_console_state[CONSOLE_STATE_CMDLINE_MAX];
+#endif
+
 /*
  * There are 3 different kind of UART Core available on MSM.
  * High Speed UART (i.e. Legacy HSUART), GSBI based HSUART
@@ -1697,6 +1704,11 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 	struct uart_port *port;
 	struct msm_serial_hslite_platform_data *pdata;
 	const struct of_device_id *match;
+#ifdef CONFIG_CONSOLE_DYNAMIC_ENABLE
+	struct pinctrl *console_uart_pins;
+	struct pinctrl_state *set_state;
+	char dev_name[30];
+#endif
 	u32 line;
 	int ret;
 
@@ -1726,6 +1738,39 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 
 	if (unlikely(line < 0 || line >= UART_NR))
 		return -ENXIO;
+
+#ifdef CONFIG_CONSOLE_DYNAMIC_ENABLE
+	if (g_console_name != NULL && g_console_state != NULL) {
+		if (!strncmp(g_console_state, "enabled", 7)) {
+			pr_info("console enabled by cmdline.\n");
+		} else {
+			snprintf(dev_name, 30, "ttyHSL%d", line);
+			if (!strncmp(g_console_name, dev_name, 7)) {
+				pr_info("dev ttyHSL%d is the console in cmdline.\n", line);
+				if (pdev->dev.of_node) {
+					console_uart_pins =
+							devm_pinctrl_get(&pdev->dev);
+					if (IS_ERR_OR_NULL(console_uart_pins)) {
+						pr_err("cannot get ttyHSL%d pinctl.\n", line);
+					} else {
+						set_state =
+								pinctrl_lookup_state(console_uart_pins,
+								"console_sleep");
+						if (IS_ERR(set_state))
+							pr_err("cannot get pinctrl console sleep state\n");
+						else {
+							ret = pinctrl_select_state(console_uart_pins, set_state);
+							if (ret)
+								pr_err("cannot config pinctrl console sleep state\n");
+						}
+					}
+					pr_info("set ttyHSL%d into power saved mode.\n", line);
+					return -ENODEV;
+				}
+			}
+		}
+	}
+#endif
 
 	pr_info("detected port #%d (ttyHSL%d)\n", pdev->id, line);
 

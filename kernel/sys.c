@@ -58,6 +58,8 @@
 #include <linux/cred.h>
 
 #include <linux/kmsg_dump.h>
+#include <linux/panic_reason.h>
+
 /* Move somewhere else to avoid recompiling? */
 #include <generated/utsrelease.h>
 
@@ -401,6 +403,7 @@ void kernel_restart(char *cmd)
 	kernel_restart_prepare(cmd);
 	migrate_to_reboot_cpu();
 	syscore_shutdown();
+	set_panic_trig_rsn(TRIG_CMD_REBOOT);
 	if (!cmd)
 		printk(KERN_EMERG "Restarting system.\n");
 	else
@@ -447,6 +450,7 @@ void kernel_power_off(void)
 		pm_power_off_prepare();
 	migrate_to_reboot_cpu();
 	syscore_shutdown();
+	set_panic_trig_rsn(TRIG_CMD_REBOOT);
 	printk(KERN_EMERG "Power down.\n");
 	kmsg_dump(KMSG_DUMP_POWEROFF);
 	machine_power_off();

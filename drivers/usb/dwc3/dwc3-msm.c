@@ -54,6 +54,9 @@
 #include "debug.h"
 #include "xhci.h"
 
+/* cc logic use this device to control usb mode */
+static struct dwc3_msm *_msm_dwc;
+
 /* cpu to fix usb interrupt */
 static int cpu_to_affin;
 module_param(cpu_to_affin, int, S_IRUGO|S_IWUSR);
@@ -77,7 +80,7 @@ module_param(override_phy_init, int, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(override_phy_init, "Override HSPHY Init Seq");
 
 /* Enable Proprietary charger detection */
-static bool prop_chg_detect;
+static bool prop_chg_detect = 1;
 module_param(prop_chg_detect, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(prop_chg_detect, "Enable Proprietary charger detection");
 
@@ -1454,7 +1457,7 @@ static void dwc3_chg_detect_work(struct work_struct *w)
 				mdwc->ext_chg_active = true;
 			}
 		}
-		dev_dbg(mdwc->dev, "chg_type = %s\n",
+		dev_info(mdwc->dev, "chg_type = %s\n",
 			chg_to_string(mdwc->charger.chg_type));
 		mdwc->charger.notify_detection_complete(mdwc->otg_xceiv->otg,
 								&mdwc->charger);
@@ -2076,6 +2079,41 @@ static irqreturn_t msm_dwc3_pwr_irq_thread(int irq, void *_mdwc)
 
 static u32 debug_id = true, debug_bsv, debug_connect;
 
+int fusb300_set_msm_usb_host_mode(bool mode)
+{
+	struct dwc3_msm *mdwc = NULL;
+	struct dwc3 *dwc = NULL;
+
+	if (NULL == _msm_dwc)
+		return -ENODEV;
+
+	mdwc = _msm_dwc;
+	dwc = platform_get_drvdata(mdwc->dwc3);
+
+	dev_err(mdwc->dev, "%s = %s_mode.\n", __func__, mode?"host":"device");
+
+	if (mode) {
+		/* host mode:bsv=0,id=0 */
+		mdwc->ext_xceiv.id = false;
+	} else {
+		/* device mode:bsv=1,id=1 */
+		mdwc->ext_xceiv.id = true;
+	}
+
+	if (atomic_read(&dwc->in_lpm)) {
+		dev_dbg(mdwc->dev, "%s: calling resume_work\n", __func__);
+		dwc3_resume_work(&mdwc->resume_work.work);
+	} else {
+		dev_dbg(mdwc->dev, "%s: notifying xceiv event\n", __func__);
+		if (mdwc->otg_xceiv)
+			mdwc->ext_xceiv.notify_ext_events(mdwc->otg_xceiv->otg,
+							DWC3_EVENT_XCEIV_STATE);
+	}
+
+	return mode;
+}
+EXPORT_SYMBOL(fusb300_set_msm_usb_host_mode);
+
 static int dwc3_connect_show(struct seq_file *s, void *unused)
 {
 	if (debug_connect)
@@ -2534,6 +2572,7 @@ static void dwc3_id_work(struct work_struct *w)
 		mdwc->ext_inuse = (ret == 0);
 	}
 
+	mdwc->ext_inuse = 0;
 	if (mdwc->ext_inuse) {
 		/* MHL cable: stop peripheral */
 		mdwc->ext_xceiv.id = DWC3_ID_FLOAT;
@@ -2862,6 +2901,53 @@ unreg_chrdev:
 	return ret;
 }
 
+#ifdef MHL_POWER_OUT
+struct platform_device *dwc3_mhl_t;
+struct dwc3_mhl *dwc3_mhl_n;
+
+bool start_init;
+int dwc3_otg_set_mhl_power(bool enable)
+{
+	int ret;
+	if (IS_ERR(dwc3_mhl_n->vbus_mhl)) {
+		pr_err("Failed to get dwc3_mhl_t vbus regulator");
+		return -ENODEV;
+		}
+	pr_err("%s: enable: %d\n", __func__, enable);
+	if (enable)
+		ret = regulator_enable(dwc3_mhl_n->vbus_mhl);
+	else
+		ret = regulator_disable(dwc3_mhl_n->vbus_mhl);
+
+	return ret;
+
+}
+EXPORT_SYMBOL(dwc3_otg_set_mhl_power);
+
+void dwc3_otg_start_mhl_power(void)
+{
+	if (start_init == true) {
+		pr_err("%s: returned caused by start_init == true...\n",
+				__func__);
+		return;
+	}
+	pr_err("%s:\n", __func__);
+	if (dwc3_mhl_n == NULL) {
+		pr_err("%s: returned caused by dwc3_mhl_n == NULL...\n",
+				__func__);
+		return;
+		}
+	start_init = true;
+	dwc3_mhl_n->vbus_mhl =
+			devm_regulator_get(&dwc3_mhl_t->dev, "vbus_dwc3");
+	if (IS_ERR(dwc3_mhl_n->vbus_mhl)) {
+		pr_err("Failed to get dwc3_mhl_t vbus regulator");
+		return;
+		}
+}
+EXPORT_SYMBOL(dwc3_otg_start_mhl_power);
+#endif
+
 static int dwc3_msm_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node, *dwc3_node;
@@ -2880,7 +2966,20 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "not enough memory\n");
 		return -ENOMEM;
 	}
+#ifdef MHL_POWER_OUT
+	dwc3_mhl_n = kzalloc(sizeof(struct dwc3_mhl), GFP_KERNEL);
+	if (!dwc3_mhl_n) {
+		dev_err(&pdev->dev, "not enough memory to dwc3_mhl_n\n");
+		return -ENOMEM;
+	}
 
+	dwc3_mhl_t = kzalloc(sizeof(struct platform_device), GFP_KERNEL);
+	if (!dwc3_mhl_t) {
+		dev_err(&pdev->dev, "not enough memory to dwc3_mhl_t\n");
+		return -ENOMEM;
+	}
+	memcpy(&dwc3_mhl_t, &pdev, sizeof(struct platform_device));
+#endif
 	if (!dev->dma_mask)
 		dev->dma_mask = &dev->coherent_dma_mask;
 	if (!dev->coherent_dma_mask)
@@ -3378,6 +3477,8 @@ static int dwc3_msm_probe(struct platform_device *pdev)
 	}
 
 	msm_bam_set_usb_dev(mdwc->dev);
+
+	_msm_dwc = mdwc;
 
 	return 0;
 

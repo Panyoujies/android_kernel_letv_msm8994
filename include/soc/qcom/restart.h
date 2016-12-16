@@ -18,6 +18,8 @@
 #define RESTART_DLOAD  0x1
 
 void msm_set_restart_mode(int mode);
+void set_dload_mode_ext(int on);
+
 extern int pmic_reset_irq;
 
 #endif

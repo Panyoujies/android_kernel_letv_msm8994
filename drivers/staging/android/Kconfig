@@ -86,6 +86,15 @@ config ONESHOT_SYNC_USER
 	help
 	  Provide a userspace API for creating oneshot sync objects.
 
+config ANDROID_INTF_ALARM_DEV
+	bool "Android alarm driver"
+	depends on RTC_CLASS
+	default n
+	---help---
+	Provides non-wakeup and rtc backed wakeup alarms based on rtc
+	elapsed realtime, and a non-wakeup alarm on the monotonic clock.
+	Also exports the alarm interface to user-space.
+
 source "drivers/staging/android/ion/Kconfig"
 
 source "drivers/staging/android/fiq_debugger/Kconfig"

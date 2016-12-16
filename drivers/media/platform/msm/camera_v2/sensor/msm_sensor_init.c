@@ -17,6 +17,7 @@
 #include "msm_sensor_driver.h"
 #include "msm_sensor.h"
 #include "msm_sd.h"
+#include <linux/proc_fs.h>
 
 /* Logging macro */
 #undef CDBG
@@ -54,6 +55,8 @@ static int msm_sensor_wait_for_probe_done(struct msm_sensor_init_t *s_init)
 
 	return rc;
 }
+
+struct msm_camera_sensor_slave_info *camera_slave_info[MAX_CAMERAS];
 
 /* Static function definition */
 static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
@@ -161,7 +164,193 @@ static long msm_sensor_init_subdev_fops_ioctl(
 	return video_usercopy(file, cmd, arg, msm_sensor_init_subdev_do_ioctl);
 }
 #endif
+/* camerainfo start */
+static int camerainfo_proc_open(struct inode *inode, struct file *file);
+static int camerainfo_proc_show(struct seq_file *m, void *v);
 
+static struct proc_dir_entry *camerainfo_proc_entry;
+static const struct file_operations camerainfo_fops = {
+	.owner = THIS_MODULE,
+	.open = camerainfo_proc_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+static int camerainfo_proc_open(struct inode *inode, struct file *file)
+{
+	pr_err("%s: E\n", __func__);
+	return single_open(file, camerainfo_proc_show, NULL);
+}
+
+static int camerainfo_proc_show(struct seq_file *m, void *v)
+{
+	char rel_buf[1024];
+	ssize_t cn = 0;
+	int x_output_front = 0;
+	int y_output_front = 0;
+	int x_output_rear = 0;
+	int y_output_rear = 0;
+
+	pr_err("%s: E\n", __func__);
+
+	memset(rel_buf, 0, sizeof(rel_buf));
+	if ((camera_slave_info[0] == NULL) &&
+		(camera_slave_info[1] == NULL)) {
+		cn = snprintf(rel_buf, 1024, "camera driver not runing!");
+		pr_err("%s: INFO: %s\n", __func__, rel_buf);
+	} else if ((camera_slave_info[0] == NULL) &&
+			(camera_slave_info[1] != NULL)) {
+		if (!strncmp(camera_slave_info[1]->sensor_name,
+			"ov4688", 6)) {
+			x_output_front = 2688;
+			y_output_front = 1520;
+		} else if (!strncmp(camera_slave_info[1]->sensor_name,
+			"imx132", 6)) {
+			x_output_front = 1984;
+			y_output_front = 1200;
+		} else if (!strncmp(camera_slave_info[1]->sensor_name,
+			"ov8865", 6)) {
+			x_output_front = 3264;
+			y_output_front = 2688;
+		} else {
+			x_output_front = 0;
+			y_output_front = 0;
+		}
+		cn = snprintf(rel_buf, 1024, "camera    num:\t\t1\n"
+			"=============================\n"
+			"front camera info\n"
+			"module     id:\t\t%04X\n"
+			"sensor     id:\t\t%04X\n"
+			"sensor   name:\t\t%s\n"
+			"eeprom   name:\t\t%s\n"
+			"front   width:\t\t%d\n"
+			"front  height:\t\t%d\n",
+			camera_slave_info[1]->sensor_id_info.module_id,
+			camera_slave_info[1]->sensor_id_info.sensor_id,
+			camera_slave_info[1]->sensor_name,
+			camera_slave_info[1]->eeprom_name,
+			x_output_front,
+			y_output_front);
+		pr_err("%s: INFO: %s\n", __func__, rel_buf);
+	} else if ((camera_slave_info[1] == NULL) &&
+			(camera_slave_info[0] != NULL)) {
+		if (!strncmp(camera_slave_info[0]->sensor_name,
+			"imx214", 6)) {
+			x_output_rear = 4208;
+			y_output_rear = 3120;
+		} else if (!strncmp(camera_slave_info[0]->sensor_name,
+			"imx230", 6)) {
+			x_output_rear = 5312;
+			y_output_rear = 3984;
+		} else if (!strncmp(camera_slave_info[0]->sensor_name,
+			"s5k3m2", 6)) {
+			x_output_rear = 4208;
+			y_output_rear = 3120;
+		} else {
+			x_output_rear = 0;
+			y_output_rear = 0;
+		}
+		cn = snprintf(rel_buf, 1024, "camera    num:\t\t1\n"
+			"=============================\n"
+			"rear camera info\n"
+			"module     id:\t\t%04X\n"
+			"sensor     id:\t\t%04X\n"
+			"sensor   name:\t\t%s\n"
+			"eeprom   name:\t\t%s\n"
+			"actuator name:\t\t%s\n"
+			"ois      name:\t\t%s\n"
+			"flash    name:\t\t%s\n"
+			"rear    width:\t\t%d\n"
+			"rear   height:\t\t%d\n",
+			camera_slave_info[0]->sensor_id_info.module_id,
+			camera_slave_info[0]->sensor_id_info.sensor_id,
+			camera_slave_info[0]->sensor_name,
+			camera_slave_info[0]->eeprom_name,
+			camera_slave_info[0]->actuator_name,
+			camera_slave_info[0]->ois_name,
+			camera_slave_info[0]->flash_name,
+			x_output_rear,
+			y_output_rear);
+		pr_err("%s: INFO: %s\n", __func__, rel_buf);
+	} else {
+		if (!strncmp(camera_slave_info[1]->sensor_name,
+			"ov4688", 6)) {
+			x_output_front = 2688;
+			y_output_front = 1520;
+		} else if (!strncmp(
+			camera_slave_info[1]->sensor_name,
+			"imx132", 6)) {
+			x_output_front = 1984;
+			y_output_front = 1200;
+		} else if (!strncmp(camera_slave_info[1]->sensor_name,
+			"ov8865", 6)) {
+			x_output_front = 3264;
+			y_output_front = 2688;
+		} else {
+			x_output_front = 0;
+			y_output_front = 0;
+		}
+		if (!strncmp(camera_slave_info[0]->sensor_name,
+			"imx214", 6)) {
+			x_output_rear = 4208;
+			y_output_rear = 3120;
+		} else if (!strncmp(camera_slave_info[0]->sensor_name,
+			"imx230", 6)) {
+			x_output_rear = 5312;
+			y_output_rear = 3984;
+		} else if (!strncmp(camera_slave_info[0]->sensor_name,
+			"s5k3m2", 6)) {
+			x_output_rear = 4208;
+			y_output_rear = 3120;
+		} else {
+			x_output_rear = 0;
+			y_output_rear = 0;
+		}
+		cn = snprintf(rel_buf, 1024, "camera    num:\t\t2\n"
+			"=============================\n"
+			"rear camera info\n"
+			"module     id:\t\t%04X\n"
+			"sensor     id:\t\t%04X\n"
+			"sensor   name:\t\t%s\n"
+			"eeprom   name:\t\t%s\n"
+			"actuator name:\t\t%s\n"
+			"ois      name:\t\t%s\n"
+			"flash    name:\t\t%s\n"
+			"rear    width:\t\t%d\n"
+			"rear   height:\t\t%d\n"
+			"=============================\n"
+			"front camera info\n"
+			"module     id:\t\t%04X\n"
+			"sensor     id:\t\t%04X\n"
+			"sensor   name:\t\t%s\n"
+			"eeprom   name:\t\t%s\n"
+			"front   width:\t\t%d\n"
+			"front  height:\t\t%d\n",
+			camera_slave_info[0]->sensor_id_info.module_id,
+			camera_slave_info[0]->sensor_id_info.sensor_id,
+			camera_slave_info[0]->sensor_name,
+			camera_slave_info[0]->eeprom_name,
+			camera_slave_info[0]->actuator_name,
+			camera_slave_info[0]->ois_name,
+			camera_slave_info[0]->flash_name,
+			x_output_rear,
+			y_output_rear,
+			camera_slave_info[1]->sensor_id_info.module_id,
+			camera_slave_info[1]->sensor_id_info.sensor_id,
+			camera_slave_info[1]->sensor_name,
+			camera_slave_info[1]->eeprom_name,
+			x_output_front,
+			y_output_front);
+		pr_err("%s: INFO: %s\n", __func__, rel_buf);
+	}
+	seq_printf(m, rel_buf);
+
+	pr_err("%s: X\n", __func__);
+
+	return 0;
+}
+/* camerainfo end */
 static int __init msm_sensor_init_module(void)
 {
 	int ret = 0;
@@ -204,6 +393,9 @@ static int __init msm_sensor_init_module(void)
 		&msm_sensor_init_v4l2_subdev_fops;
 
 	init_waitqueue_head(&s_init->state_wait);
+
+	camerainfo_proc_entry =
+		proc_create("camerainfo", 0, NULL, &camerainfo_fops);
 
 	return 0;
 error:

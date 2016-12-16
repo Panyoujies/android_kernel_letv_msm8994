@@ -26,7 +26,7 @@
 #include "xhci.h"
 
 #define VBUS_REG_CHECK_DELAY	(msecs_to_jiffies(1000))
-#define MAX_INVALID_CHRGR_RETRY 3
+#define MAX_INVALID_CHRGR_RETRY 1
 static int max_chgr_retry_count = MAX_INVALID_CHRGR_RETRY;
 module_param(max_chgr_retry_count, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(max_chgr_retry_count, "Max invalid charger retry count");
@@ -407,13 +407,6 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	if (dotg->charger->charging_disabled)
 		return 0;
 
-	if (dotg->charger->chg_type != DWC3_INVALID_CHARGER) {
-		dev_dbg(phy->dev,
-			"SKIP setting power supply type again,chg_type = %d\n",
-			dotg->charger->chg_type);
-		goto skip_psy_type;
-	}
-
 	if (dotg->charger->chg_type == DWC3_SDP_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB;
 	else if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
@@ -421,15 +414,15 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 	else if (dotg->charger->chg_type == DWC3_DCP_CHARGER ||
 			dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_DCP;
+	else if (dotg->charger->chg_type == DWC3_FLOATED_CHARGER)
+		power_supply_type = POWER_SUPPLY_TYPE_USB_ACA;
 	else
 		power_supply_type = POWER_SUPPLY_TYPE_UNKNOWN;
 
 	power_supply_set_supply_type(dotg->psy, power_supply_type);
 
-skip_psy_type:
-
 	if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
-		mA = DWC3_IDEV_CHG_MAX;
+		mA = DWC3_CDP_CHG_MAX;
 
 	if (dotg->charger->max_power == mA)
 		return 0;
@@ -568,7 +561,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					break;
 				case DWC3_CDP_CHARGER:
 					dwc3_otg_set_power(phy,
-							DWC3_IDEV_CHG_MAX);
+							DWC3_CDP_CHG_MAX);
 					dwc3_otg_start_peripheral(&dotg->otg,
 									1);
 					phy->state = OTG_STATE_B_PERIPHERAL;
@@ -595,7 +588,8 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					 */
 					if (dotg->charger_retry_count ==
 						max_chgr_retry_count) {
-						dwc3_otg_set_power(phy, 0);
+						dwc3_otg_set_power(phy,
+							DWC3_FLOAT_CHG_MAX);
 						dbg_event(0xFF, "FLCHG put", 0);
 						pm_runtime_put_sync(phy->dev);
 						break;

@@ -32,6 +32,7 @@
 #include <soc/qcom/smem.h>
 #include <soc/qcom/smsm.h>
 
+#include "ssr_monitor.h"
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
 #include "pil-msa.h"
@@ -42,6 +43,8 @@
 #define STOP_ACK_TIMEOUT_MS	1000
 
 #define subsys_to_drv(d) container_of(d, struct modem_data, subsys_desc)
+
+u32 modem_nospc_flg = 0;
 
 static void log_modem_sfr(void)
 {
@@ -59,7 +62,15 @@ static void log_modem_sfr(void)
 		return;
 	}
 
+	memset(reason, 0, MAX_SSR_REASON_LEN);
+	memcpy(reason, smem_reason, min(size, (u32)sizeof(reason)));
+
+	if(strstr(reason,"EFS ENOSPC"))
+		modem_nospc_flg = 1;
+
+	ssr_monitor_store_crashreason(reason);
 	strlcpy(reason, smem_reason, min(size, MAX_SSR_REASON_LEN));
+	pr_err("@MODEM_CRASH@ : %s .\n", reason);
 	pr_err("modem subsystem failure reason: %s.\n", reason);
 
 	smem_reason[0] = '\0';
@@ -69,6 +80,8 @@ static void log_modem_sfr(void)
 static void restart_modem(struct modem_data *drv)
 {
 	log_modem_sfr();
+	if(modem_nospc_flg == 1)
+		set_rst_level_soc(drv->subsys);
 	drv->ignore_errors = true;
 	subsystem_restart_dev(drv->subsys);
 }

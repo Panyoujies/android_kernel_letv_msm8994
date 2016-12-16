@@ -292,3 +292,9 @@ config USB_QCOM_IPC_BRIDGE
 	  will be bridged in kernel space. This driver works as a transport
 	  layer for IPC router module that enables communication between
 	  APPS processor and MODEM processor.
+
+config USB_FUSB300
+	tristate "USB FAIRCHILD USB300"
+	depends on USB
+	help
+		usb_type-c connect control.
